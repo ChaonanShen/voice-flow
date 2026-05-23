@@ -7,6 +7,7 @@ pub mod capture;
 pub mod clipboard;
 pub mod config;
 pub mod cpal_backend;
+pub mod engine;
 pub mod file_backend;
 pub mod hotkey;
 pub mod paste;

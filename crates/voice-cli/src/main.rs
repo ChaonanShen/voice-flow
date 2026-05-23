@@ -2,11 +2,12 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{Parser, Subcommand};
 use voice_asr_cloud::dashscope::DASHSCOPE_API_KEY_ENV;
 use voice_asr_cloud::{CloudEngineConfig, ParaformerCloudEngine};
 use voice_asr_local::{StreamingZipformer, MODEL_DIR_ENV};
 use voice_core::asr::AsrEngine;
+use voice_core::engine::{resolve_engine_selection, EngineKind, EngineSelection};
 use voice_core::capture::{AudioCapture, AudioFormat};
 use voice_core::clipboard::{ClipboardWriter, SystemClipboard};
 use voice_core::cpal_backend::CpalCapture;
@@ -24,17 +25,20 @@ struct Cli {
     cmd: Command,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
-enum EngineKind {
+/// CLI-facing flag value. Maps to [`EngineKind`] in voice-core.
+///
+/// Kept as a separate type so `voice-core` does not need to depend on clap.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, clap::ValueEnum)]
+enum EngineFlag {
     Local,
     Cloud,
 }
 
-impl EngineKind {
-    fn label(self) -> &'static str {
-        match self {
-            Self::Local => "local",
-            Self::Cloud => "cloud",
+impl From<EngineFlag> for EngineKind {
+    fn from(value: EngineFlag) -> Self {
+        match value {
+            EngineFlag::Local => EngineKind::Local,
+            EngineFlag::Cloud => EngineKind::Cloud,
         }
     }
 }
@@ -64,8 +68,8 @@ enum Command {
         /// 输入 WAV 文件路径。
         input: PathBuf,
         /// 选择 ASR 引擎：`local`（默认）或 `cloud`（DashScope Paraformer-realtime-v2）。
-        #[arg(long, value_enum, default_value_t = EngineKind::Local)]
-        engine: EngineKind,
+        #[arg(long, value_enum, default_value_t = EngineFlag::Local)]
+        engine: EngineFlag,
         /// sherpa-onnx Streaming Zipformer 模型目录（仅 `--engine local` 使用）。
         /// 未提供时读取 VOICE_FLOW_SHERPA_ZIPFORMER_MODEL_DIR。
         #[arg(long)]
@@ -122,7 +126,7 @@ fn main() -> Result<()> {
             engine,
             model_dir,
             api_key,
-        } => transcribe(input, engine, model_dir, api_key),
+        } => transcribe(input, engine.into(), model_dir, api_key),
         Command::ListenHotkey => listen_hotkey(),
         Command::PushToTalkRecord {
             output,
@@ -226,7 +230,8 @@ fn transcribe(
         engine_kind.label(),
     );
 
-    let engine = build_engine(engine_kind, model_dir, api_key)?;
+    let selection = resolve_cli_selection(engine_kind, model_dir, api_key)?;
+    let engine = build_engine(&selection)?;
     let text = engine
         .transcribe(&samples, format)
         .context("failed to transcribe WAV")?;
@@ -236,27 +241,43 @@ fn transcribe(
     Ok(())
 }
 
-fn build_engine(
+/// Resolve CLI flags + env vars into a [`EngineSelection`].
+///
+/// Reads `VOICE_FLOW_SHERPA_ZIPFORMER_MODEL_DIR` / `DASHSCOPE_API_KEY` as
+/// secondary sources before handing off to the core router. Router itself
+/// never reads env vars — that policy stays in the CLI layer.
+fn resolve_cli_selection(
     kind: EngineKind,
     model_dir: Option<PathBuf>,
     api_key: Option<String>,
-) -> Result<Box<dyn AsrEngine>> {
-    match kind {
-        EngineKind::Local => {
-            let model_dir = model_dir
-                .or_else(|| std::env::var_os(MODEL_DIR_ENV).map(PathBuf::from))
-                .with_context(|| format!("missing --model-dir or {MODEL_DIR_ENV}"))?;
-            eprintln!("local model dir: {}", model_dir.display());
-            let engine = StreamingZipformer::from_model_dir(&model_dir)
-                .with_context(|| format!("failed to load model from {}", model_dir.display()))?;
+) -> Result<EngineSelection> {
+    let model_dir = model_dir.or_else(|| std::env::var_os(MODEL_DIR_ENV).map(PathBuf::from));
+    let api_key = api_key.or_else(|| std::env::var(DASHSCOPE_API_KEY_ENV).ok());
+    resolve_engine_selection(kind, model_dir, api_key).map_err(|e| match e {
+        voice_core::engine::EngineSelectionError::MissingModelDir => {
+            anyhow::anyhow!("missing --model-dir or {MODEL_DIR_ENV}")
+        }
+        voice_core::engine::EngineSelectionError::MissingApiKey => {
+            anyhow::anyhow!("missing --api-key or {DASHSCOPE_API_KEY_ENV}")
+        }
+        other => anyhow::Error::from(other),
+    })
+}
+
+/// Build an [`AsrEngine`] from a resolved [`EngineSelection`]. **No silent
+/// fallback** — if the cloud engine fails to initialize the caller sees the
+/// real error instead of getting a local engine.
+fn build_engine(selection: &EngineSelection) -> Result<Box<dyn AsrEngine>> {
+    match selection {
+        EngineSelection::Local(params) => {
+            eprintln!("local model dir: {}", params.model_dir.display());
+            let engine = StreamingZipformer::from_model_dir(&params.model_dir).with_context(|| {
+                format!("failed to load model from {}", params.model_dir.display())
+            })?;
             Ok(Box::new(engine))
         }
-        EngineKind::Cloud => {
-            let api_key = api_key
-                .or_else(|| std::env::var(DASHSCOPE_API_KEY_ENV).ok())
-                .filter(|k| !k.trim().is_empty())
-                .with_context(|| format!("missing --api-key or {DASHSCOPE_API_KEY_ENV}"))?;
-            let config = CloudEngineConfig::dashscope(api_key);
+        EngineSelection::Cloud(params) => {
+            let config = CloudEngineConfig::dashscope(params.api_key.clone());
             let engine = ParaformerCloudEngine::from_config(&config)
                 .context("failed to initialize cloud engine")?;
             eprintln!("cloud provider: dashscope paraformer-realtime-v2");
