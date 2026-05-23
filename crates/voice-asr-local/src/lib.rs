@@ -187,9 +187,20 @@ impl StreamingZipformer {
         &self.options
     }
 
-    /// 创建一个空的在线识别流。后续 PR 会在此基础上喂入 PCM chunk。
+    /// 创建一个空的在线识别流。
     pub fn create_stream(&self) -> OnlineStream {
         self.recognizer.create_stream()
+    }
+
+    /// 开始一个流式识别会话。
+    pub fn start_streaming(&self, format: AudioFormat) -> Result<StreamingSession<'_>, AsrError> {
+        validate_audio_format(format)?;
+        Ok(StreamingSession {
+            engine: self,
+            stream: self.create_stream(),
+            format,
+            finished: false,
+        })
     }
 
     fn transcribe_mono_f32(&self, samples: &[f32], sample_rate: i32) -> Result<String, AsrError> {
@@ -211,11 +222,84 @@ impl StreamingZipformer {
             )));
         }
 
+        self.result_text(&stream)
+    }
+
+    fn decode_pending(&self, stream: &OnlineStream, max_steps: usize) -> Result<(), AsrError> {
+        for _ in 0..max_steps {
+            if !self.recognizer.is_ready(stream) {
+                return Ok(());
+            }
+            self.recognizer.decode(stream);
+        }
+
+        if self.recognizer.is_ready(stream) {
+            return Err(AsrError::Decode(format!(
+                "decoder did not finish within {max_steps} steps"
+            )));
+        }
+        Ok(())
+    }
+
+    fn result_text(&self, stream: &OnlineStream) -> Result<String, AsrError> {
         let result = self
             .recognizer
-            .get_result(&stream)
+            .get_result(stream)
             .ok_or_else(|| AsrError::Decode("missing recognizer result".to_string()))?;
         Ok(result.text.trim().to_string())
+    }
+}
+
+/// 单个流式识别会话。
+pub struct StreamingSession<'a> {
+    engine: &'a StreamingZipformer,
+    stream: OnlineStream,
+    format: AudioFormat,
+    finished: bool,
+}
+
+impl StreamingSession<'_> {
+    /// 追加一段交错存储的 PCM 16-bit chunk，并尽可能推进解码。
+    pub fn accept_pcm(&mut self, pcm: &[i16]) -> Result<String, AsrError> {
+        if self.finished {
+            return Err(AsrError::Decode(
+                "cannot accept PCM after stream is finished".to_string(),
+            ));
+        }
+
+        let samples = pcm_i16_to_mono_f32(pcm, self.format)?;
+        self.stream
+            .accept_waveform(self.format.sample_rate as i32, &samples);
+        self.engine.decode_pending(
+            &self.stream,
+            max_decode_steps(samples.len(), self.format.sample_rate as i32),
+        )?;
+        self.text()
+    }
+
+    /// 标记输入结束，冲刷尾部上下文并返回最终文本。
+    pub fn finish(&mut self) -> Result<String, AsrError> {
+        if !self.finished {
+            self.stream.input_finished();
+            self.finished = true;
+        }
+        self.engine.decode_pending(
+            &self.stream,
+            max_decode_steps(
+                self.format.sample_rate as usize,
+                self.format.sample_rate as i32,
+            ),
+        )?;
+        self.text()
+    }
+
+    /// 返回当前识别假设。
+    pub fn text(&self) -> Result<String, AsrError> {
+        self.engine.result_text(&self.stream)
+    }
+
+    pub fn format(&self) -> AudioFormat {
+        self.format
     }
 }
 
@@ -228,6 +312,18 @@ impl AsrEngine for StreamingZipformer {
 }
 
 fn validate_audio(format: AudioFormat, pcm: &[i16]) -> Result<(), AsrError> {
+    validate_audio_format(format)?;
+    if pcm.len() % format.channels as usize != 0 {
+        return Err(AsrError::UnsupportedFormat(format!(
+            "{} samples is not divisible by {} channels",
+            pcm.len(),
+            format.channels
+        )));
+    }
+    Ok(())
+}
+
+fn validate_audio_format(format: AudioFormat) -> Result<(), AsrError> {
     if format.sample_rate == 0 {
         return Err(AsrError::UnsupportedFormat(
             "sample rate must be positive".to_string(),
@@ -237,13 +333,6 @@ fn validate_audio(format: AudioFormat, pcm: &[i16]) -> Result<(), AsrError> {
         return Err(AsrError::UnsupportedFormat(
             "channels must be positive".to_string(),
         ));
-    }
-    if pcm.len() % format.channels as usize != 0 {
-        return Err(AsrError::UnsupportedFormat(format!(
-            "{} samples is not divisible by {} channels",
-            pcm.len(),
-            format.channels
-        )));
     }
     Ok(())
 }
@@ -392,6 +481,29 @@ mod tests {
     }
 
     #[test]
+    fn rejects_streaming_accept_after_finish_when_env_is_set() {
+        let Ok(dir) = std::env::var(MODEL_DIR_ENV) else {
+            return;
+        };
+
+        let recognizer = StreamingZipformer::from_model_dir(dir).unwrap();
+        let mut session = recognizer
+            .start_streaming(AudioFormat {
+                sample_rate: 16_000,
+                channels: 1,
+            })
+            .unwrap();
+        session.finish().unwrap();
+
+        let err = session.accept_pcm(&[0]).unwrap_err();
+
+        assert_eq!(
+            err.to_string(),
+            "decode failed: cannot accept PCM after stream is finished"
+        );
+    }
+
+    #[test]
     fn loads_real_model_when_env_is_set() {
         let Ok(dir) = std::env::var(MODEL_DIR_ENV) else {
             return;
@@ -399,6 +511,34 @@ mod tests {
 
         let recognizer = StreamingZipformer::from_model_dir(dir).unwrap();
         let _stream = recognizer.create_stream();
+    }
+
+    #[test]
+    fn streams_real_model_test_wav_when_env_is_set() {
+        let Ok(dir) = std::env::var(MODEL_DIR_ENV) else {
+            return;
+        };
+
+        let wav = Path::new(&dir).join("test_wavs/0.wav");
+        let wave = sherpa_onnx::Wave::read(&path_to_string(&wav).unwrap()).unwrap();
+        let recognizer = StreamingZipformer::from_model_dir(dir).unwrap();
+        let mut session = recognizer
+            .start_streaming(AudioFormat {
+                sample_rate: wave.sample_rate() as u32,
+                channels: 1,
+            })
+            .unwrap();
+
+        for chunk in wave.samples().chunks(1600) {
+            let pcm: Vec<i16> = chunk
+                .iter()
+                .map(|sample| (sample.clamp(-1.0, 1.0) * i16::MAX as f32) as i16)
+                .collect();
+            session.accept_pcm(&pcm).unwrap();
+        }
+        let text = session.finish().unwrap();
+
+        assert!(!text.is_empty());
     }
 
     #[test]
