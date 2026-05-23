@@ -10,6 +10,7 @@ use voice_core::clipboard::{ClipboardWriter, SystemClipboard};
 use voice_core::cpal_backend::CpalCapture;
 use voice_core::file_backend::FileCapture;
 use voice_core::hotkey::{PushToTalkHotkey, PUSH_TO_TALK_HOTKEY_LABEL};
+use voice_core::paste::{PasteSimulator, SystemPaste};
 use voice_core::push_to_talk::{PushToTalkRecorder, PushToTalkRecorderEvent};
 use voice_core::wav::{read_pcm16_wav, write_pcm16_wav};
 
@@ -319,6 +320,9 @@ fn push_to_talk_transcribe(
                         .write_text(&text)
                         .context("failed to write transcript to clipboard")?;
                     eprintln!("copied transcript to clipboard");
+                    let mut paste = SystemPaste::new();
+                    paste.paste().context("failed to simulate paste")?;
+                    eprintln!("pasted transcript into focused app");
                     println!("{text}");
                     return Ok(());
                 }

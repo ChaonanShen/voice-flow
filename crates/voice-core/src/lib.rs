@@ -8,5 +8,6 @@ pub mod clipboard;
 pub mod cpal_backend;
 pub mod file_backend;
 pub mod hotkey;
+pub mod paste;
 pub mod push_to_talk;
 pub mod wav;
