@@ -40,26 +40,31 @@ xengineer/
 
 ## 四、构建与运行
 
-> 占位：随 Step 推进逐步补全。
-
 ```bash
-# 编译（待 Step 1.4 workspace 落地后可用）
+# 准备 sherpa-onnx 静态库 archive 和 Streaming Zipformer 模型
+bash scripts/download-models.sh
+
+# 编译。sherpa-onnx build.rs 会从本地 archive 读取静态库，不需要联网下载 release 包
+export SHERPA_ONNX_ARCHIVE_DIR=$HOME/.cache/xengineer/sherpa-onnx
 cargo build
 
-# 录音 5 秒（待 Step 2 完成）
-voice-cli record out.wav --duration 5s
+# 录音 5 秒
+cargo run -p voice-cli -- record out.wav --duration 5s
 
-# 识别（待 Step 3 完成）
-voice-cli transcribe out.wav
+# 识别 WAV
+export XENGINEER_SHERPA_ZIPFORMER_MODEL_DIR=models/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20
+cargo run -p voice-cli -- transcribe out.wav
 ```
 
 ## 五、模型下载
 
-`models/` 目录下不入库实际权重，提供下载脚本（Step 3.7 引入）：
+`models/` 目录下不入库实际权重。下载脚本默认把 archive 缓存在 `$HOME/.cache/xengineer/sherpa-onnx`，并把模型解压到 `models/`：
 
 ```bash
-# 占位
 bash scripts/download-models.sh
+
+# 只下载 archive，不解压模型
+EXTRACT=0 bash scripts/download-models.sh
 ```
 
 ## 六、Demo 视频
