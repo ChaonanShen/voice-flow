@@ -30,6 +30,12 @@ pub trait AudioCapture {
     fn start(&mut self, format: AudioFormat) -> Result<CaptureSession, CaptureError>;
 }
 
+impl<T: AudioCapture + ?Sized> AudioCapture for Box<T> {
+    fn start(&mut self, format: AudioFormat) -> Result<CaptureSession, CaptureError> {
+        (**self).start(format)
+    }
+}
+
 /// 一次采集会话。drop 即停止。
 pub struct CaptureSession {
     /// 实际生效的音频格式（可能与请求不同）。

@@ -9,6 +9,7 @@ use voice_core::capture::{AudioCapture, AudioFormat};
 use voice_core::cpal_backend::CpalCapture;
 use voice_core::file_backend::FileCapture;
 use voice_core::hotkey::{PushToTalkHotkey, PUSH_TO_TALK_HOTKEY_LABEL};
+use voice_core::push_to_talk::{PushToTalkRecorder, PushToTalkRecorderEvent};
 use voice_core::wav::{read_pcm16_wav, write_pcm16_wav};
 
 #[derive(Parser)]
@@ -48,6 +49,20 @@ enum Command {
     },
     /// 注册默认全局快捷键并打印按下/松开事件。
     ListenHotkey,
+    /// 按住默认快捷键录音，松开后写入 WAV 文件。
+    PushToTalkRecord {
+        /// 输出 WAV 文件路径。
+        output: PathBuf,
+        /// 采样率（Hz）。设备不支持时会回退到最近值。
+        #[arg(long, default_value_t = 16_000)]
+        sample_rate: u32,
+        /// 声道数。
+        #[arg(long, default_value_t = 1)]
+        channels: u16,
+        /// 用 WAV 文件替代真实麦克风（适合无声卡环境与 demo 复现）。
+        #[arg(long)]
+        input: Option<PathBuf>,
+    },
 }
 
 fn main() -> Result<()> {
@@ -62,6 +77,12 @@ fn main() -> Result<()> {
         } => record(output, duration.into(), sample_rate, channels, input),
         Command::Transcribe { input, model_dir } => transcribe(input, model_dir),
         Command::ListenHotkey => listen_hotkey(),
+        Command::PushToTalkRecord {
+            output,
+            sample_rate,
+            channels,
+            input,
+        } => push_to_talk_record(output, sample_rate, channels, input),
     }
 }
 
@@ -168,6 +189,73 @@ fn listen_hotkey() -> Result<()> {
             println!("{PUSH_TO_TALK_HOTKEY_LABEL} {event}");
         }
         std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+fn push_to_talk_record(
+    output: PathBuf,
+    sample_rate: u32,
+    channels: u16,
+    input: Option<PathBuf>,
+) -> Result<()> {
+    let format = AudioFormat {
+        sample_rate,
+        channels,
+    };
+    let backend = capture_backend(input)?;
+    let hotkey = PushToTalkHotkey::register_default().context("failed to register hotkey")?;
+    let mut recorder = PushToTalkRecorder::new(backend, format);
+
+    eprintln!(
+        "hold {PUSH_TO_TALK_HOTKEY_LABEL} to record, release to write {}",
+        output.display()
+    );
+    loop {
+        recorder.poll_audio();
+        if let Some(event) = hotkey.try_recv().context("failed to read hotkey event")? {
+            match recorder
+                .handle_hotkey_event(event)
+                .context("failed to handle push-to-talk recording")?
+            {
+                Some(PushToTalkRecorderEvent::RecordingStarted(actual)) => {
+                    eprintln!(
+                        "recording started ({} Hz / {} ch)",
+                        actual.sample_rate, actual.channels
+                    );
+                }
+                Some(PushToTalkRecorderEvent::RecordingStopped(audio)) => {
+                    write_pcm16_wav(&output, audio.format, &audio.samples)
+                        .with_context(|| format!("failed to write WAV to {}", output.display()))?;
+                    let secs = audio.samples.len() as f64
+                        / (audio.format.sample_rate as f64 * audio.format.channels as f64);
+                    eprintln!(
+                        "recording stopped; wrote {} ({:.2}s, {} samples) to {}",
+                        humansize(audio.samples.len() * 2),
+                        secs,
+                        audio.samples.len(),
+                        output.display()
+                    );
+                    return Ok(());
+                }
+                None => {}
+            }
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+fn capture_backend(input: Option<PathBuf>) -> Result<Box<dyn AudioCapture>> {
+    match input {
+        Some(path) => {
+            eprintln!("source: file {}", path.display());
+            Ok(Box::new(FileCapture::from_wav(&path).with_context(
+                || format!("failed to load {}", path.display()),
+            )?))
+        }
+        None => {
+            eprintln!("source: default microphone (cpal)");
+            Ok(Box::new(CpalCapture::new()))
+        }
     }
 }
 
