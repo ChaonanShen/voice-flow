@@ -37,11 +37,15 @@ pub struct CaptureSession {
     /// PCM chunk 接收端。
     pub rx: Receiver<PcmChunk>,
     /// 后端持有的运行中资源；drop 后停止采集。
-    pub _stop: Box<dyn StopHandle>,
+    /// 调用方一般无需访问，仅需在结束时让 `CaptureSession` 离开作用域。
+    pub stop: Box<dyn StopHandle>,
 }
 
 /// 采集会话的停止句柄。drop 时应停止底层流。
-pub trait StopHandle: Send {}
+///
+/// 不强制 `Send`：部分平台的 `cpal::Stream` 不是 `Send`，调用方应在
+/// 同一线程持有 `CaptureSession` 直到结束。
+pub trait StopHandle {}
 
 #[derive(Debug, thiserror::Error)]
 pub enum CaptureError {
