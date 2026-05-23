@@ -1,0 +1,24 @@
+[workspace]
+
+[package]
+name = "xengineer-desktop"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.78"
+license = "Apache-2.0"
+repository = "https://github.com/ChaonanShen/xengineer"
+authors = ["xengineer contributors"]
+description = "Windows-first Tauri desktop shell for xengineer"
+build = "build.rs"
+
+[dependencies]
+tauri = { version = "2.11.2", default-features = false, features = ["wry"] }
+
+[build-dependencies]
+tauri-build = { version = "2.6.2", default-features = false }
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
