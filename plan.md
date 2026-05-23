@@ -75,8 +75,19 @@ xengineer/
 | 2.2 | `feat(core): implement cpal capture backend` | cpal 后端实现，输出 PCM 流到内存缓冲 |
 | 2.3 | `feat(core): write WAV file from PCM buffer` | PCM → WAV 文件写入 |
 | 2.4 | `feat(cli): add record subcommand` | `voice-cli record out.wav --duration 5s` |
+| 2.5 | `feat(core): add PCM 16-bit WAV reader` | 与 writer 对称，遍历 chunk，跳过 LIST 等未知 chunk |
+| 2.6 | `feat(core): add file capture backend` | `FileCapture` 实现 `AudioCapture`，按真实采样率节奏回放 WAV |
+| 2.7 | `feat(cli): record --input flag` | `voice-cli record --input file.wav` 走 FileCapture，用于无声卡环境与 demo 复现 |
 
 **Step 验收**：`voice-cli record out.wav` 录 5 秒可播放的 WAV。
+
+**实际验收（2026-05-23）**：
+
+- **真麦克风路径（CpalCapture）**：当前 Linux 开发环境 headless 无音频设备，端到端录音留待 Windows/macOS 上跑 demo 时再验。代码路径已编过，单元测试覆盖 trait/格式协商/i16 转换的纯逻辑部分。
+- **文件回放路径（FileCapture）**：在 Linux 上完整验证通过。流程：用脚本生成 2s 16kHz mono 440Hz 正弦 WAV → `voice-cli record out.wav --input sine.wav --duration 3s` → FileCapture 按 100ms/chunk 节奏发送 20 个 chunk → 写出 WAV 与原文件**字节完全一致**（`cmp` 验证）。
+- **单元测试**：`cargo test -p voice-core` 共 9 个测试全过（WAV writer × 2、reader × 4、FileCapture × 3）。
+- **Step 2 实际拆分超出预想**：原计划 4 个 PR，实际 7 个。FileCapture 三个 PR（2.5/2.6/2.7）是 plan §5.6 提到的"能拆就拆"——用文件回放后端解决 Linux 无声卡环境下的端到端测试问题，同时让 demo 视频能用固定音频做可复现对照。
+- **Step 1 也有偏离**：插入了一个独立 PR `chore: configure rsproxy mirror for crates.io`（清华 git 索引偶尔挂、改用 rsproxy sparse 镜像）。
 
 ---
 
@@ -306,3 +317,26 @@ PR 描述空白或与代码变更严重不符 = **无效作品**（见 §2.2）�
 1. **GitHub 仓库 URL**：用户已建仓，需提供 URL（用于 `git remote add`）
 2. **云端 ASR 厂商**：Step 7 之前确定。备选**阿里云 DashScope（Paraformer-realtime-v2）**——免费额度大、与端侧 Zipformer 同源、文档清楚。当前 Step 1-6 不阻塞
 3. **目标平台优先级**：Linux / macOS / Windows 三选一作为主开发与演示平台（影响快捷键、Tauri 打包、enigo 行为）
+
+## 十一、测试策略
+
+跨平台音频项目按硬件依赖分四层，避免所有测试都需要真设备：
+
+1. **无依赖纯逻辑层**（`cargo test`，三平台 + 任意 CI 都跑）
+   - WAV 编解码、样本格式转换（f32/u16↔i16）、模式系统的文本处理、配置解析
+   - 当前覆盖：`voice-core` 9 个单元测试
+
+2. **Mock / 文件回放后端**（同样跑在所有平台）
+   - `FileCapture`（已落地，PR 2.6）从 WAV 按真实节奏喂数据，验证"录音→WAV→ASR→粘贴"整条管道
+   - voice-cli 通过 `--input` 切换，绕开真硬件；这层覆盖 80% 业务逻辑
+
+3. **平台编译矩阵**（GitHub Actions 三平台 runner）
+   - `ubuntu-latest`（装 libasound2-dev）/ `windows-latest` / `macos-latest`
+   - 跑 `cargo build` + `cargo test` + `cargo clippy`，保证三平台都不退化
+   - Linux runner 没真设备没关系，能编译 + 跑 mock 测试就够
+   - **未落地**，待 CI 配置 PR
+
+4. **手动硬件验收**（demo 视频 + checklist）
+   - 真麦克风、真快捷键、真粘贴、Tauri 悬浮窗 —— 没法自动化
+   - 写在 `docs/test-checklist.md`（待 Step 9 引入）
+
