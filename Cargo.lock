@@ -1321,6 +1321,8 @@ name = "voice-asr-local"
 version = "0.1.0"
 dependencies = [
  "sherpa-onnx",
+ "tempfile",
+ "voice-core",
 ]
 
 [[package]]
