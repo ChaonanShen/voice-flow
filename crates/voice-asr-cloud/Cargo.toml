@@ -1,0 +1,16 @@
+[package]
+name = "voice-asr-cloud"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Cloud ASR engine (DashScope Paraformer-realtime-v2)"
+
+[dependencies]
+voice-core = { path = "../voice-core" }
+thiserror = "1"
+
+[lints]
+workspace = true
