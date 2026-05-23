@@ -18,7 +18,7 @@
 | 核心引擎 | Rust | - |
 | 音频采集 | `cpal` | Apache-2.0/MIT |
 | **端侧 ASR**（默认） | sherpa-onnx + Streaming Zipformer-bilingual zh-en | Apache-2.0 |
-| ASR 绑定 | `sherpa-rs` | Apache-2.0 |
+| ASR 绑定 | 官方 `sherpa-onnx` Rust binding | Apache-2.0 |
 | **云端 ASR**（可选增强，后期接入） | 备选阿里 DashScope Paraformer-realtime-v2 | - |
 | 全局快捷键 | `global-hotkey` | - |
 | 剪贴板/模拟粘贴 | `arboard` + `enigo` | MIT |
@@ -93,17 +93,18 @@ xengineer/
 
 ### Step 3：端侧 ASR 引擎（默认）
 
-**目标**：CLI 接入 sherpa-rs，端侧识别一段 WAV 出文本。这是项目的核心默认能力。
+**目标**：CLI 接入 sherpa-onnx，端侧识别一段 WAV 出文本。这是项目的核心默认能力。
 
 | PR | 标题 | 单一职责 |
 |---|---|---|
 | 3.1 | `feat(asr): add AsrEngine trait` | 定义引擎抽象（trait + 错误类型） |
-| 3.2 | `chore(asr-local): add sherpa-rs dependency` | 仅加依赖、跑通最简调用 |
-| 3.3 | `feat(asr-local): load streaming zipformer model` | 模型加载与初始化 |
-| 3.4 | `feat(asr-local): implement non-streaming transcribe` | WAV → 文本（非流式接口先打通） |
-| 3.5 | `feat(asr-local): implement streaming chunk decode` | PCM chunk 流式解码 |
-| 3.6 | `feat(cli): add transcribe subcommand` | `voice-cli transcribe out.wav` 出文本 |
-| 3.7 | `docs: add model download script` | `scripts/download-models.sh` + README 用法 |
+| 3.2 | `chore(asr-local): spike sherpa binding choice` | 验证 Rust binding、构建方式与离线 archive 方案 |
+| 3.3 | `chore(asr-local): add sherpa-onnx dependency` | 仅加依赖、跑通最简调用 |
+| 3.4 | `feat(asr-local): load streaming zipformer model` | 模型加载与初始化 |
+| 3.5 | `feat(asr-local): implement non-streaming transcribe` | WAV → 文本（非流式接口先打通） |
+| 3.6 | `feat(asr-local): implement streaming chunk decode` | PCM chunk 流式解码 |
+| 3.7 | `feat(cli): add transcribe subcommand` | `voice-cli transcribe out.wav` 出文本 |
+| 3.8 | `docs: add model download script` | `scripts/download-models.sh` + README 用法 |
 
 **Step 验收**：`voice-cli transcribe out.wav` 端侧出中文文本，无需联网。
 

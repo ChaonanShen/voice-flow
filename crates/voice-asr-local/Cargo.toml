@@ -8,5 +8,8 @@ repository.workspace = true
 authors.workspace = true
 description = "On-device ASR engine backed by sherpa-onnx"
 
+[dependencies]
+sherpa-onnx = "1.13.2"
+
 [lints]
 workspace = true

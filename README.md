@@ -17,7 +17,7 @@
 | 核心引擎 | Rust | - |
 | 音频采集 | [`cpal`](https://crates.io/crates/cpal) | Apache-2.0 / MIT |
 | 端侧 ASR（默认） | [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) + Streaming Zipformer-bilingual zh-en | Apache-2.0 |
-| ASR 绑定 | [`sherpa-rs`](https://crates.io/crates/sherpa-rs) | Apache-2.0 |
+| ASR 绑定 | 官方 [`sherpa-onnx`](https://crates.io/crates/sherpa-onnx) Rust binding | Apache-2.0 |
 | 云端 ASR（后期可选） | 阿里云 DashScope Paraformer-realtime-v2 | - |
 | 全局快捷键 | [`global-hotkey`](https://crates.io/crates/global-hotkey) | - |
 | 剪贴板 / 模拟粘贴 | [`arboard`](https://crates.io/crates/arboard) + [`enigo`](https://crates.io/crates/enigo) | MIT |
