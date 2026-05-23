@@ -63,6 +63,21 @@ enum Command {
         #[arg(long)]
         input: Option<PathBuf>,
     },
+    /// 按住默认快捷键录音，松开后使用端侧 ASR 打印文本。
+    PushToTalkTranscribe {
+        /// sherpa-onnx Streaming Zipformer 模型目录。未提供时读取 XENGINEER_SHERPA_ZIPFORMER_MODEL_DIR。
+        #[arg(long)]
+        model_dir: Option<PathBuf>,
+        /// 采样率（Hz）。设备不支持时会回退到最近值。
+        #[arg(long, default_value_t = 16_000)]
+        sample_rate: u32,
+        /// 声道数。
+        #[arg(long, default_value_t = 1)]
+        channels: u16,
+        /// 用 WAV 文件替代真实麦克风（适合无声卡环境与 demo 复现）。
+        #[arg(long)]
+        input: Option<PathBuf>,
+    },
 }
 
 fn main() -> Result<()> {
@@ -83,6 +98,12 @@ fn main() -> Result<()> {
             channels,
             input,
         } => push_to_talk_record(output, sample_rate, channels, input),
+        Command::PushToTalkTranscribe {
+            model_dir,
+            sample_rate,
+            channels,
+            input,
+        } => push_to_talk_transcribe(model_dir, sample_rate, channels, input),
     }
 }
 
@@ -235,6 +256,64 @@ fn push_to_talk_record(
                         audio.samples.len(),
                         output.display()
                     );
+                    return Ok(());
+                }
+                None => {}
+            }
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+fn push_to_talk_transcribe(
+    model_dir: Option<PathBuf>,
+    sample_rate: u32,
+    channels: u16,
+    input: Option<PathBuf>,
+) -> Result<()> {
+    let model_dir = model_dir
+        .or_else(|| std::env::var_os(MODEL_DIR_ENV).map(PathBuf::from))
+        .with_context(|| format!("missing --model-dir or {MODEL_DIR_ENV}"))?;
+    let engine = StreamingZipformer::from_model_dir(&model_dir)
+        .with_context(|| format!("failed to load model from {}", model_dir.display()))?;
+
+    let format = AudioFormat {
+        sample_rate,
+        channels,
+    };
+    let backend = capture_backend(input)?;
+    let hotkey = PushToTalkHotkey::register_default().context("failed to register hotkey")?;
+    let mut recorder = PushToTalkRecorder::new(backend, format);
+
+    eprintln!(
+        "hold {PUSH_TO_TALK_HOTKEY_LABEL} to record, release to transcribe with {}",
+        model_dir.display()
+    );
+    loop {
+        recorder.poll_audio();
+        if let Some(event) = hotkey.try_recv().context("failed to read hotkey event")? {
+            match recorder
+                .handle_hotkey_event(event)
+                .context("failed to handle push-to-talk recording")?
+            {
+                Some(PushToTalkRecorderEvent::RecordingStarted(actual)) => {
+                    eprintln!(
+                        "recording started ({} Hz / {} ch)",
+                        actual.sample_rate, actual.channels
+                    );
+                }
+                Some(PushToTalkRecorderEvent::RecordingStopped(audio)) => {
+                    let secs = audio.samples.len() as f64
+                        / (audio.format.sample_rate as f64 * audio.format.channels as f64);
+                    eprintln!(
+                        "recording stopped; transcribing {:.2}s ({} samples)",
+                        secs,
+                        audio.samples.len()
+                    );
+                    let text = engine
+                        .transcribe(&audio.samples, audio.format)
+                        .context("failed to transcribe recording")?;
+                    println!("{text}");
                     return Ok(());
                 }
                 None => {}
