@@ -8,6 +8,7 @@ use voice_core::asr::AsrEngine;
 use voice_core::capture::{AudioCapture, AudioFormat};
 use voice_core::cpal_backend::CpalCapture;
 use voice_core::file_backend::FileCapture;
+use voice_core::hotkey::{PushToTalkHotkey, PUSH_TO_TALK_HOTKEY_LABEL};
 use voice_core::wav::{read_pcm16_wav, write_pcm16_wav};
 
 #[derive(Parser)]
@@ -45,6 +46,8 @@ enum Command {
         #[arg(long)]
         model_dir: Option<PathBuf>,
     },
+    /// 注册默认全局快捷键并打印按下/松开事件。
+    ListenHotkey,
 }
 
 fn main() -> Result<()> {
@@ -58,6 +61,7 @@ fn main() -> Result<()> {
             input,
         } => record(output, duration.into(), sample_rate, channels, input),
         Command::Transcribe { input, model_dir } => transcribe(input, model_dir),
+        Command::ListenHotkey => listen_hotkey(),
     }
 }
 
@@ -152,6 +156,19 @@ fn transcribe(input: PathBuf, model_dir: Option<PathBuf>) -> Result<()> {
         .context("failed to transcribe WAV")?;
     println!("{text}");
     Ok(())
+}
+
+fn listen_hotkey() -> Result<()> {
+    eprintln!("registering global hotkey: {PUSH_TO_TALK_HOTKEY_LABEL}");
+    eprintln!("press Ctrl+C to stop");
+
+    let hotkey = PushToTalkHotkey::register_default().context("failed to register hotkey")?;
+    loop {
+        if let Some(event) = hotkey.try_recv().context("failed to read hotkey event")? {
+            println!("{PUSH_TO_TALK_HOTKEY_LABEL} {event}");
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
 }
 
 fn humansize(bytes: usize) -> String {

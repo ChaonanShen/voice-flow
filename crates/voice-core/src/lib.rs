@@ -6,4 +6,5 @@ pub mod asr;
 pub mod capture;
 pub mod cpal_backend;
 pub mod file_backend;
+pub mod hotkey;
 pub mod wav;

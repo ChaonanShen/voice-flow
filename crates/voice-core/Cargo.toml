@@ -11,6 +11,7 @@ description = "Core engine: audio capture, ASR routing and mode pipeline"
 [dependencies]
 thiserror = "2"
 cpal = "0.15"
+global-hotkey = "0.8.0"
 
 [dev-dependencies]
 tempfile = "3"
