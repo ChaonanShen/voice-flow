@@ -7,11 +7,12 @@
     "frontendDist": "../ui"
   },
   "app": {
+    "withGlobalTauri": true,
     "windows": [
       {
         "title": "xengineer",
-        "width": 360,
-        "height": 180,
+        "width": 460,
+        "height": 360,
         "resizable": false,
         "decorations": false,
         "alwaysOnTop": true

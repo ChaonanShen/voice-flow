@@ -86,49 +86,62 @@ impl AudioCapture for CpalCapture {
     }
 }
 
-/// 从设备支持的配置里挑一个最贴近请求的：通道数完全匹配，采样率落在
-/// `[min, max]` 内则用请求值，否则取最近边界。挑不到则返回错误。
+/// 从设备支持的配置里挑一个最贴近请求的：优先通道数完全匹配；若设备
+/// 不支持请求通道数，则退回设备支持的第一个可用通道数。采样率落在
+/// `[min, max]` 内则用请求值，否则取最近边界。
 fn pick_supported_config(
     device: &cpal::Device,
     requested: AudioFormat,
 ) -> Result<cpal::SupportedStreamConfig, CaptureError> {
-    let configs = device
+    let configs: Vec<_> = device
         .supported_input_configs()
-        .map_err(|e| CaptureError::Backend(e.to_string()))?;
+        .map_err(|e| CaptureError::Backend(e.to_string()))?
+        .collect();
 
-    let mut best: Option<cpal::SupportedStreamConfigRange> = None;
-    for cfg in configs {
-        if cfg.channels() != requested.channels {
-            continue;
-        }
-        if !matches!(
-            cfg.sample_format(),
-            SampleFormat::F32 | SampleFormat::I16 | SampleFormat::U16
-        ) {
-            continue;
-        }
-        best = Some(cfg);
-        break;
-    }
-
-    let range = best.ok_or_else(|| {
+    let range = choose_supported_config(configs, requested).ok_or_else(|| {
         CaptureError::UnsupportedFormat(format!(
-            "no input config matches channels={}",
+            "no supported input config for requested channels={}",
             requested.channels
         ))
     })?;
 
-    let req_rate = cpal::SampleRate(requested.sample_rate);
-    let chosen_rate = if req_rate >= range.min_sample_rate() && req_rate <= range.max_sample_rate()
-    {
-        req_rate
-    } else if req_rate < range.min_sample_rate() {
-        range.min_sample_rate()
-    } else {
-        range.max_sample_rate()
-    };
+    Ok(range.with_sample_rate(chosen_sample_rate(
+        range.min_sample_rate().0,
+        range.max_sample_rate().0,
+        requested.sample_rate,
+    )))
+}
 
-    Ok(range.with_sample_rate(chosen_rate))
+fn choose_supported_config(
+    configs: impl IntoIterator<Item = cpal::SupportedStreamConfigRange>,
+    requested: AudioFormat,
+) -> Option<cpal::SupportedStreamConfigRange> {
+    let supported: Vec<_> = configs
+        .into_iter()
+        .filter(|cfg| {
+            matches!(
+                cfg.sample_format(),
+                SampleFormat::F32 | SampleFormat::I16 | SampleFormat::U16
+            )
+        })
+        .collect();
+
+    supported
+        .iter()
+        .find(|cfg| cfg.channels() == requested.channels)
+        .cloned()
+        .or_else(|| supported.into_iter().next())
+}
+
+fn chosen_sample_rate(min: u32, max: u32, requested: u32) -> cpal::SampleRate {
+    let req_rate = cpal::SampleRate(requested);
+    if req_rate.0 >= min && req_rate.0 <= max {
+        req_rate
+    } else if req_rate.0 < min {
+        cpal::SampleRate(min)
+    } else {
+        cpal::SampleRate(max)
+    }
 }
 
 fn f32_to_i16(s: &f32) -> i16 {
@@ -145,3 +158,71 @@ struct CpalStopHandle {
 }
 
 impl StopHandle for CpalStopHandle {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use cpal::{SampleRate, SupportedBufferSize, SupportedStreamConfigRange};
+
+    fn config(
+        channels: u16,
+        min_rate: u32,
+        max_rate: u32,
+        sample_format: SampleFormat,
+    ) -> SupportedStreamConfigRange {
+        SupportedStreamConfigRange::new(
+            channels,
+            SampleRate(min_rate),
+            SampleRate(max_rate),
+            SupportedBufferSize::Unknown,
+            sample_format,
+        )
+    }
+
+    #[test]
+    fn prefers_requested_channels_when_available() {
+        let chosen = choose_supported_config(
+            [
+                config(2, 44_100, 48_000, SampleFormat::F32),
+                config(1, 16_000, 48_000, SampleFormat::I16),
+            ],
+            AudioFormat {
+                sample_rate: 16_000,
+                channels: 1,
+            },
+        )
+        .unwrap();
+
+        assert_eq!(chosen.channels(), 1);
+    }
+
+    #[test]
+    fn falls_back_to_available_channels() {
+        let chosen = choose_supported_config(
+            [config(2, 44_100, 48_000, SampleFormat::F32)],
+            AudioFormat {
+                sample_rate: 16_000,
+                channels: 1,
+            },
+        )
+        .unwrap();
+
+        assert_eq!(chosen.channels(), 2);
+    }
+
+    #[test]
+    fn clamps_requested_sample_rate_to_supported_range() {
+        assert_eq!(
+            chosen_sample_rate(44_100, 48_000, 16_000),
+            SampleRate(44_100)
+        );
+        assert_eq!(
+            chosen_sample_rate(44_100, 48_000, 96_000),
+            SampleRate(48_000)
+        );
+        assert_eq!(
+            chosen_sample_rate(16_000, 48_000, 16_000),
+            SampleRate(16_000)
+        );
+    }
+}

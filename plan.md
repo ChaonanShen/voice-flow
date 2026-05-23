@@ -183,8 +183,9 @@ xengineer/
 
 - **5.1 已完成**：`908e344 docs: add Windows testing guide`。新增 `WINDOWS_TESTING.md`，覆盖 Windows 原生环境准备、Windows 版 sherpa 静态库与模型准备、CLI 编译、WAV 转写、麦克风录音、全局快捷键和完整链路手测步骤。
 - **5.1 补充完成**：Windows 指南已补充离线 archive 准备方式，测试机无法访问 GitHub 时由用户在可联网环境下载 `sherpa-onnx-v1.13.2-win-x64-static-MT-Release-lib.tar.bz2` 和模型 archive 后复制到本机缓存目录。
-- **5.2 / 5.3 / 5.4 待实机结果驱动**：这三个 PR 是条件性修复，必须基于 Windows 原生环境的真实失败现象执行；当前 Linux headless 环境不能可靠判断 Windows 粘贴、全局快捷键或麦克风问题，不提前做猜测性修改。
-- **5.5 待完成**：需要 Windows 原生环境跑完 `transcribe` / `record` / `listen-hotkey` / `push-to-talk-transcribe` 后，回写实际结果、目标程序和已知限制。
+- **5.2 / 5.3 / 5.4 已由 Windows 实测驱动修正到桌面链路**：桌面端改用 Tauri 官方 `global-shortcut` 插件注册全局快捷键；Tauri v2 补 `capabilities/default.json`，允许前端监听状态事件；`CpalCapture` 从“必须单声道”改为“优先单声道，不支持时回退到设备可用通道数”，解决 Windows 默认麦克风只暴露双声道输入时报 `no input config matches channels=1` 的问题。
+- **5.5 已完成首轮桌面实测记录**：Windows 原生 Git Bash / MSVC 环境下，`apps/desktop/src-tauri` 运行 `cargo run`，按住 `Ctrl+Alt+Space` 能调用麦克风，松开后端侧 ASR 转写，悬浮窗显示最近文本，并自动写入剪贴板 / 粘贴到当前光标位置。
+- **CLI 完整链路仍可后续补测**：本轮人工确认的是桌面常驻链路；`voice-cli push-to-talk-transcribe` 仍保留为底层排障入口。
 
 ---
 
@@ -204,9 +205,12 @@ xengineer/
 
 **实际进展（2026-05-23）**：
 
-- **6.1 / 6.2 已先行落地为 scaffold**：已准备 Windows-first Tauri 骨架和静态前端页面草稿，当前不纳入 Linux 主验证路径，也不要求在 Linux 上完成桌面依赖编译。
+- **6.1 / 6.2 已完成**：Windows-first Tauri v2 应用骨架已在 `apps/desktop/` 落地，包含无边框置顶悬浮窗、状态区域、最近一次识别文本区域和设置入口。
 - **6.3 已完成核心类型**：`voice-core` 新增 `RealtimeState` / `RealtimeStateEvent`，CLI 已开始输出状态日志，供桌面 / 手机 / Web adapter 复用。
-- **6.4 / 6.5 待 Windows 前端接入**：前端还没有真正消费这些状态事件，也没有在 Windows 上跑桌面壳的实机验收。
+- **6.4 / 6.5 已完成首版接入**：桌面后端常驻运行快捷键、录音、端侧 ASR、剪贴板和自动粘贴链路；前端监听 `realtime-state` / `runtime-error`，显示待机 / 录音 / 转写 / 完成 / 出错状态和最近一次识别文本。
+- **自动验证通过**：Windows MSVC 环境下 `apps/desktop/src-tauri` 可完成 `cargo build`，并能启动 `target/debug/xengineer-desktop.exe` 保持运行；`cargo test --workspace` 通过。
+- **Windows 人工验收通过**：启动桌面应用后，按下 `Ctrl+Alt+Space` 会调用麦克风并进入录音链路；松开后完成端侧转写，悬浮窗“最近文本”更新，文本自动写入剪贴板并粘贴到当前光标位置。
+- **已知修复项**：补齐 Tauri v2 capability 后解决 `event.listen not allowed`；桌面全局快捷键改走 Tauri `global-shortcut` 插件，避免后台线程直接注册 Windows 热键；录音后端支持麦克风通道数回退。
 
 ---
 
@@ -226,8 +230,10 @@ xengineer/
 
 **实际进展（2026-05-23）**：
 
-- **7.1 已完成核心实现**：`voice-core` 新增 `AppConfig` / `HotkeyConfig`，支持 TOML 读写和默认值回填；对应单元测试已通过。
-- **7.2 / 7.3 / 7.4 / 7.5 待 Windows 桌面接入**：配置持久化已经有核心结构，但还没接到真实 Windows 设置面板和热更新流程。
+- **7.1 已完成核心实现**：`voice-core` 新增 `AppConfig` / `HotkeyConfig`，支持 TOML 读写、默认值回填和快捷键标签生成；对应单元测试已通过。
+- **7.2 / 7.3 / 7.4 已完成首版接入**：桌面设置面板可编辑模型目录和快捷键组合，并通过 Tauri command 写入 `%APPDATA%\xengineer\app.toml`。
+- **7.5 已完成首版接入并通过基础链路验收**：保存设置后后端会请求 runtime 重启，重新加载模型目录并重新注册热键；无需关闭桌面程序。默认配置写入 `%APPDATA%\xengineer\app.toml`。
+- **后续增强**：当前模型目录先用文本框输入，后续可补原生目录选择器；热键冲突或非法按键会通过运行时错误展示，需要基于更多实测再决定是否做更强的保存前校验。
 
 ---
 

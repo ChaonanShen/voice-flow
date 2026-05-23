@@ -8,6 +8,8 @@ use global_hotkey::{
     GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState,
 };
 
+use crate::config::HotkeyConfig;
+
 /// Default push-to-talk shortcut used by the minimal realtime loop.
 pub const PUSH_TO_TALK_HOTKEY_LABEL: &str = "Ctrl+Alt+Space";
 
@@ -37,10 +39,16 @@ impl PushToTalkHotkey {
     /// Register `Ctrl+Alt+Space` and start receiving events through
     /// [`Self::try_recv`].
     pub fn register_default() -> Result<Self, HotkeyError> {
+        Self::register(HotkeyConfig::default())
+    }
+
+    /// Register the configured push-to-talk shortcut and start receiving events
+    /// through [`Self::try_recv`].
+    pub fn register(config: HotkeyConfig) -> Result<Self, HotkeyError> {
         ensure_supported_session()?;
 
         let manager = GlobalHotKeyManager::new()?;
-        let hotkey = default_push_to_talk_hotkey();
+        let hotkey = hotkey_from_config(&config)?;
         manager.register(hotkey)?;
 
         Ok(Self {
@@ -70,12 +78,21 @@ impl PushToTalkHotkey {
 pub enum HotkeyError {
     #[error("unsupported hotkey session: {0}")]
     UnsupportedSession(String),
+    #[error("invalid hotkey: {0}")]
+    Invalid(String),
     #[error("hotkey backend error: {0}")]
     Backend(#[from] global_hotkey::Error),
 }
 
-fn default_push_to_talk_hotkey() -> HotKey {
+pub fn default_push_to_talk_hotkey() -> HotKey {
     HotKey::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::Space)
+}
+
+pub fn hotkey_from_config(config: &HotkeyConfig) -> Result<HotKey, HotkeyError> {
+    let label = config.to_label();
+    label
+        .parse::<HotKey>()
+        .map_err(|e| HotkeyError::Invalid(e.to_string()))
 }
 
 #[cfg(target_os = "linux")]
@@ -105,6 +122,15 @@ mod tests {
         assert!(hotkey.mods.contains(Modifiers::ALT));
         assert_eq!(hotkey.key, Code::Space);
         assert_eq!(PUSH_TO_TALK_HOTKEY_LABEL, "Ctrl+Alt+Space");
+    }
+
+    #[test]
+    fn default_config_builds_default_hotkey() {
+        let hotkey = hotkey_from_config(&HotkeyConfig::default()).unwrap();
+
+        assert!(hotkey.mods.contains(Modifiers::CONTROL));
+        assert!(hotkey.mods.contains(Modifiers::ALT));
+        assert_eq!(hotkey.key, Code::Space);
     }
 
     #[test]

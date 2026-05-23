@@ -43,6 +43,26 @@ impl Default for HotkeyConfig {
     }
 }
 
+impl HotkeyConfig {
+    pub fn to_label(&self) -> String {
+        let mut parts = Vec::new();
+        if self.ctrl {
+            parts.push("Ctrl".to_string());
+        }
+        if self.alt {
+            parts.push("Alt".to_string());
+        }
+        if self.shift {
+            parts.push("Shift".to_string());
+        }
+        if self.logo {
+            parts.push("Super".to_string());
+        }
+        parts.push(self.key.clone());
+        parts.join("+")
+    }
+}
+
 impl AppConfig {
     pub fn read_from(path: impl AsRef<Path>) -> Result<Self, ConfigError> {
         let path = path.as_ref();
@@ -117,6 +137,7 @@ mod tests {
         assert_eq!(config.hotkey.shift, false);
         assert_eq!(config.hotkey.logo, false);
         assert_eq!(config.hotkey.key, "Space");
+        assert_eq!(config.hotkey.to_label(), "Ctrl+Alt+Space");
     }
 
     #[test]

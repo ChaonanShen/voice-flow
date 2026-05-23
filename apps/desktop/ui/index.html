@@ -7,18 +7,47 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <main class="shell" aria-label="xengineer voice input status">
+    <main class="shell" aria-label="xengineer voice input">
       <section class="status-row">
         <div class="status-dot" data-state="idle" aria-hidden="true"></div>
-        <div>
+        <div class="status-text">
           <p class="label">xengineer</p>
           <h1 id="state-label">待机</h1>
         </div>
+        <button id="settings-toggle" class="icon-button" type="button" title="设置">
+          <span aria-hidden="true">...</span>
+        </button>
       </section>
 
       <section class="transcript" aria-label="最近一次识别文本">
         <p class="label">最近文本</p>
         <p id="last-transcript">尚无识别结果</p>
+      </section>
+
+      <section class="runtime-error" id="runtime-error" hidden aria-label="运行错误">
+        <p class="label">错误详情</p>
+        <p id="runtime-error-text"></p>
+      </section>
+
+      <section class="settings" id="settings-panel" hidden aria-label="设置">
+        <label class="field">
+          <span>模型目录</span>
+          <input id="model-dir" type="text" spellcheck="false" />
+        </label>
+        <div class="hotkey-grid" aria-label="快捷键设置">
+          <label><input id="hotkey-ctrl" type="checkbox" />Ctrl</label>
+          <label><input id="hotkey-alt" type="checkbox" />Alt</label>
+          <label><input id="hotkey-shift" type="checkbox" />Shift</label>
+          <label><input id="hotkey-logo" type="checkbox" />Win</label>
+          <label class="field hotkey-key">
+            <span>键</span>
+            <input id="hotkey-key" type="text" />
+          </label>
+        </div>
+        <div class="settings-actions">
+          <button id="save-settings" type="button">保存</button>
+          <span id="settings-message" role="status"></span>
+        </div>
       </section>
     </main>
     <script src="./main.js"></script>

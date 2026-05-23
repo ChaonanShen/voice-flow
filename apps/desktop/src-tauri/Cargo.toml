@@ -12,7 +12,13 @@ description = "Windows-first Tauri desktop shell for xengineer"
 build = "build.rs"
 
 [dependencies]
+anyhow = "1"
+dirs = "6"
+serde = { version = "1", features = ["derive"] }
 tauri = { version = "2.11.2", default-features = false, features = ["wry"] }
+tauri-plugin-global-shortcut = "2"
+voice-asr-local = { path = "../../../crates/voice-asr-local" }
+voice-core = { path = "../../../crates/voice-core" }
 
 [build-dependencies]
 tauri-build = { version = "2.6.2", default-features = false }

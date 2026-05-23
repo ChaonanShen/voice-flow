@@ -1,5 +1,327 @@
+use std::path::{Path, PathBuf};
+use std::sync::{
+    mpsc::{self, Receiver, TryRecvError},
+    Arc, Mutex,
+};
+use std::thread;
+use std::time::Duration;
+
+use anyhow::{Context, Result};
+use serde::Serialize;
+use tauri::{AppHandle, Emitter, State};
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+use voice_asr_local::{StreamingZipformer, DEFAULT_STREAMING_ZIPFORMER_DIR, MODEL_DIR_ENV};
+use voice_core::asr::AsrEngine;
+use voice_core::capture::AudioFormat;
+use voice_core::clipboard::{ClipboardWriter, SystemClipboard};
+use voice_core::config::{AppConfig, HotkeyConfig};
+use voice_core::cpal_backend::CpalCapture;
+use voice_core::hotkey::PushToTalkEvent;
+use voice_core::paste::{PasteSimulator, SystemPaste};
+use voice_core::push_to_talk::{PushToTalkRecorder, PushToTalkRecorderEvent};
+use voice_core::state::{RealtimeState, RealtimeStateEvent};
+
+const SAMPLE_RATE: u32 = 16_000;
+const CHANNELS: u16 = 1;
+
+#[derive(Clone)]
+struct DesktopState {
+    runtime: RuntimeHandle,
+}
+
+type RuntimeHandle = Arc<Mutex<RuntimeState>>;
+
+#[derive(Default)]
+struct RuntimeState {
+    config: AppConfig,
+    running: bool,
+    restart_requested: bool,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct ErrorEvent {
+    state: &'static str,
+    error: String,
+}
+
+#[tauri::command]
+fn get_config(state: State<'_, DesktopState>) -> AppConfig {
+    state
+        .runtime
+        .lock()
+        .expect("runtime mutex poisoned")
+        .config
+        .clone()
+}
+
+#[tauri::command]
+fn save_config(config: AppConfig, state: State<'_, DesktopState>) -> Result<AppConfig, String> {
+    config
+        .write_to(config_path())
+        .map_err(|e| format!("failed to save config: {e}"))?;
+
+    let mut runtime = state.runtime.lock().expect("runtime mutex poisoned");
+    runtime.config = config.clone();
+    runtime.restart_requested = true;
+    Ok(config)
+}
+
+#[tauri::command]
+fn start_runtime(app: AppHandle, state: State<'_, DesktopState>) -> Result<(), String> {
+    let runtime = state.runtime.clone();
+    {
+        let mut guard = runtime.lock().expect("runtime mutex poisoned");
+        if guard.running {
+            return Ok(());
+        }
+        guard.running = true;
+    }
+
+    thread::Builder::new()
+        .name("xengineer-realtime".to_string())
+        .spawn(move || runtime_loop(app, runtime))
+        .map_err(|e| format!("failed to start runtime: {e}"))?;
+
+    Ok(())
+}
+
 fn main() {
+    let config = load_config();
+    let state = DesktopState {
+        runtime: Arc::new(Mutex::new(RuntimeState {
+            config,
+            running: false,
+            restart_requested: false,
+        })),
+    };
+
     tauri::Builder::default()
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .manage(state)
+        .invoke_handler(tauri::generate_handler![
+            get_config,
+            save_config,
+            start_runtime
+        ])
+        .setup(|app| {
+            app.emit(
+                "realtime-state",
+                RealtimeStateEvent::new(RealtimeState::Idle),
+            )?;
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("failed to run xengineer desktop app");
+}
+
+fn runtime_loop(app: AppHandle, runtime: RuntimeHandle) {
+    loop {
+        let config = {
+            let mut guard = runtime.lock().expect("runtime mutex poisoned");
+            guard.restart_requested = false;
+            guard.config.clone()
+        };
+
+        if let Err(err) = run_runtime_session(&app, &runtime, config) {
+            emit_error(&app, err);
+            thread::sleep(Duration::from_secs(1));
+        }
+    }
+}
+
+fn run_runtime_session(app: &AppHandle, runtime: &RuntimeHandle, config: AppConfig) -> Result<()> {
+    let model_dir = resolve_model_dir(config.model_dir.as_deref())?;
+    let engine = StreamingZipformer::from_model_dir(&model_dir)
+        .with_context(|| format!("failed to load model from {}", model_dir.display()))?;
+    let hotkey = DesktopHotkey::register(app, config.hotkey.clone())
+        .with_context(|| format!("failed to register hotkey {}", config.hotkey.to_label()))?;
+    let mut recorder = PushToTalkRecorder::new(
+        CpalCapture::new(),
+        AudioFormat {
+            sample_rate: SAMPLE_RATE,
+            channels: CHANNELS,
+        },
+    );
+
+    emit_state(app, RealtimeStateEvent::new(RealtimeState::Idle));
+
+    loop {
+        if take_restart(runtime) {
+            drop(hotkey);
+            return Ok(());
+        }
+
+        recorder.poll_audio();
+        if let Some(event) = hotkey.try_recv().context("failed to read hotkey event")? {
+            match recorder
+                .handle_hotkey_event(event)
+                .map_err(|e| anyhow::anyhow!(e))
+                .context("failed to handle push-to-talk event")?
+            {
+                Some(PushToTalkRecorderEvent::RecordingStarted(_)) => {
+                    emit_state(app, RealtimeStateEvent::new(RealtimeState::Recording));
+                }
+                Some(PushToTalkRecorderEvent::RecordingStopped(audio)) => {
+                    emit_state(app, RealtimeStateEvent::new(RealtimeState::Transcribing));
+                    let text = engine
+                        .transcribe(&audio.samples, audio.format)
+                        .context("failed to transcribe recording")?;
+                    paste_transcript(&text).context("failed to paste transcript")?;
+                    emit_state(
+                        app,
+                        RealtimeStateEvent::new(RealtimeState::Completed).with_transcript(text),
+                    );
+                    emit_state(app, RealtimeStateEvent::new(RealtimeState::Idle));
+                }
+                None => {}
+            }
+        }
+
+        thread::sleep(Duration::from_millis(20));
+    }
+}
+
+struct DesktopHotkey {
+    app: AppHandle,
+    label: String,
+    rx: Receiver<PushToTalkEvent>,
+}
+
+impl DesktopHotkey {
+    fn register(app: &AppHandle, config: HotkeyConfig) -> Result<Self> {
+        let label = config.to_label();
+        let (tx, rx) = mpsc::channel();
+
+        app.global_shortcut()
+            .on_shortcut(label.as_str(), move |_app, _shortcut, event| {
+                let push_event = match event.state {
+                    ShortcutState::Pressed => PushToTalkEvent::Pressed,
+                    ShortcutState::Released => PushToTalkEvent::Released,
+                };
+                let _ = tx.send(push_event);
+            })
+            .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+
+        Ok(Self {
+            app: app.clone(),
+            label,
+            rx,
+        })
+    }
+
+    fn try_recv(&self) -> Result<Option<PushToTalkEvent>> {
+        match self.rx.try_recv() {
+            Ok(event) => Ok(Some(event)),
+            Err(TryRecvError::Empty) => Ok(None),
+            Err(TryRecvError::Disconnected) => {
+                anyhow::bail!("hotkey event channel disconnected")
+            }
+        }
+    }
+}
+
+impl Drop for DesktopHotkey {
+    fn drop(&mut self) {
+        let _ = self.app.global_shortcut().unregister(self.label.as_str());
+    }
+}
+
+fn paste_transcript(text: &str) -> Result<()> {
+    let mut clipboard = SystemClipboard::new();
+    clipboard.write_text(text)?;
+    let mut paste = SystemPaste::new();
+    paste.paste()?;
+    Ok(())
+}
+
+fn take_restart(runtime: &RuntimeHandle) -> bool {
+    let mut guard = runtime.lock().expect("runtime mutex poisoned");
+    if guard.restart_requested {
+        guard.restart_requested = false;
+        true
+    } else {
+        false
+    }
+}
+
+fn emit_state(app: &AppHandle, event: RealtimeStateEvent) {
+    let _ = app.emit("realtime-state", event);
+}
+
+fn emit_error(app: &AppHandle, error: anyhow::Error) {
+    eprintln!("runtime error: {error:#}");
+    let _ = app.emit(
+        "runtime-error",
+        ErrorEvent {
+            state: "error",
+            error: error.to_string(),
+        },
+    );
+}
+
+fn load_config() -> AppConfig {
+    match AppConfig::read_from(config_path()) {
+        Ok(config) => with_default_model_dir(config),
+        Err(_) => {
+            let config = with_default_model_dir(AppConfig::default());
+            let _ = config.write_to(config_path());
+            config
+        }
+    }
+}
+
+fn with_default_model_dir(mut config: AppConfig) -> AppConfig {
+    if config.model_dir.is_none() {
+        if let Some(path) = default_model_dir() {
+            config.model_dir = Some(path.display().to_string());
+        }
+    }
+    config
+}
+
+fn resolve_model_dir(configured: Option<&str>) -> Result<PathBuf> {
+    if let Some(path) = configured.filter(|p| !p.trim().is_empty()) {
+        let path = PathBuf::from(path);
+        if path.is_dir() {
+            return Ok(path);
+        }
+    }
+
+    if let Some(path) = std::env::var_os(MODEL_DIR_ENV).map(PathBuf::from) {
+        if path.is_dir() {
+            return Ok(path);
+        }
+    }
+
+    if let Some(path) = default_model_dir() {
+        if path.is_dir() {
+            return Ok(path);
+        }
+    }
+
+    anyhow::bail!("model directory is not configured or does not exist")
+}
+
+fn default_model_dir() -> Option<PathBuf> {
+    workspace_root().map(|root| root.join("models").join(DEFAULT_STREAMING_ZIPFORMER_DIR))
+}
+
+fn workspace_root() -> Option<PathBuf> {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .and_then(Path::parent)
+        .map(Path::to_path_buf)
+}
+
+fn config_path() -> PathBuf {
+    dirs::config_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("xengineer")
+        .join("app.toml")
+}
+
+#[allow(dead_code)]
+fn default_hotkey() -> HotkeyConfig {
+    HotkeyConfig::default()
 }

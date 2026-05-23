@@ -8,6 +8,7 @@ Cargo.lock.bak
 # ===== Tauri =====
 # 桌面外壳产物（Step 6 引入后生效）
 apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/gen/
 apps/desktop/dist/
 apps/desktop/node_modules/
 
