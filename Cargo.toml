@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/voice-core", "crates/voice-asr-local"]
+members = ["crates/voice-core", "crates/voice-asr-local", "crates/voice-cli"]
 
 [workspace.package]
 version = "0.1.0"
