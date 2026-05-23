@@ -5,11 +5,11 @@
 **核心**：实时快速语音输入法，按住快捷键说话，松开后文本自动粘贴到当前光标位置。
 
 **关键设计原则**：
-- **默认模式 = 实时快速语音输入**：路径最短——ASR 直出 → 粘贴，无任何润色
-- **ASR 引擎默认端侧**：开箱即用、无网络依赖、隐私不离开设备；云端作为后期可选增强（更高准确率 / 方言扩展 / 长上下文场景）
-- **创新点 = 多模式架构**：默认"实时"模式只做转写；"程序员模式"等其他模式承载所有定制化处理（符号转写、代码标点等）。执行顺序上先验证普通实时输入，再落地模式系统
+- **默认链路 = ASR 直出 → 粘贴**：最短路径，按住即说、松开即贴，无任何后处理
+- **ASR 引擎可选 = 端侧 / 云端**：端侧用于离线、隐私场景；云端用于更高准确率与方言扩展。两条路径都是一等公民，用户按场景选
+- **创新方向（待设计）= AI 改写**：参考 Wispr Flow / Superwhisper，把口语化原文再过一层 LLM，输出更适合当前场景的 prompt / 邮件 / commit 等。具体形态见 Step 10 草稿
 
-把"端侧默认 + 模式系统"作为产品骨架，是这版计划的架构核心；但近期开发顺序先服务 Windows 上的普通实时输入验收。云端引擎被设计为可插拔的增强能力，而非默认依赖。
+近期开发顺序先服务 Windows 上的实时输入链路（Step 1-7）。云端引擎和 AI 改写在基础链路稳定后并行推进。
 
 ## 二、平台策略
 
@@ -39,9 +39,10 @@ voice-flow/
 ├── README.md / LICENSE / .gitignore
 ├── Cargo.toml (workspace)
 ├── crates/
-│   ├── voice-core/        ← 录音 + 引擎路由 + 模式系统
-│   ├── voice-asr-local/   ← sherpa-onnx 端侧（默认）
-│   ├── voice-asr-cloud/   ← 云端适配（后期）
+│   ├── voice-core/        ← 录音 + ASR 抽象 + 文本管道
+│   ├── voice-asr-local/   ← sherpa-onnx 端侧引擎
+│   ├── voice-asr-cloud/   ← 云端 ASR 适配（Step 8）
+│   ├── voice-rewrite/     ← AI 改写管道（Step 10，草稿）
 │   └── voice-cli/         ← CLI 验证工具
 ├── apps/desktop/          ← Windows-first Tauri 应用（Linux 不做桌面验收）
 ├── apps/mobile/           ← 后续预留，不在当前里程碑实现
@@ -53,7 +54,7 @@ voice-flow/
 ## 五、开发步骤（Step → PR）
 
 > **粒度原则**：Step 是里程碑，每个 Step 拆成若干个**只做一件事**的细粒度 PR。
-> 主线优先把普通实时输入链跑通并尽快在 Windows 桌面实测（Step 1-5）。模式系统后移到基础设置之后，避免在默认实时链路稳定前引入后处理复杂度；云端作为后期可选增强。
+> 主线优先把实时输入链跑通并尽快在 Windows 桌面实测（Step 1-7）。Step 8 接入云端 ASR 作为引擎选项；Step 10 落地 AI 改写功能（具体设计在 §十三 草稿中）。
 
 ---
 
@@ -237,51 +238,54 @@ voice-flow/
 
 ---
 
-### Step 8：模式系统（创新点核心）
+### Step 8：云端 ASR 引擎
 
-**目标**：在普通实时输入稳定之后，再抽象 Mode 概念，落地"实时"和"程序员"两种模式，可热切换。
+**目标**：在端侧之外接入云端引擎，给用户按场景选择。端侧和云端是并列选项，不是默认/兜底关系。
 
 | PR | 标题 | 单一职责 |
 |---|---|---|
-| 8.1 | `feat(mode): add Mode trait` | 定义 `Mode::process(text) -> text` |
-| 8.2 | `feat(mode): implement realtime mode` | 实时模式 = 直通 |
-| 8.3 | `feat(mode): integrate mode dispatch` | ASR 输出后过当前模式 |
-| 8.4 | `feat(mode): add programmer symbol map` | 符号词表（"等于号"→`=`、"花括号"→`{}` 等） |
-| 8.5 | `feat(mode): programmer english punctuation` | 中文标点 → 英文标点 |
-| 8.6 | `feat(mode): programmer keyword spacing` | 关键词去空格（`if`/`else`/`return` 等保留） |
-| 8.7 | `feat(core): mode hotkey switch` | `Ctrl+Alt+M` 循环切换模式 |
+| 8.1 | `chore(asr-cloud): scaffold voice-asr-cloud crate` | 空 crate 结构 |
+| 8.2 | `feat(asr-cloud): add dashscope http client` | HTTP 客户端 + auth |
+| 8.3 | `feat(asr-cloud): paraformer-realtime websocket protocol` | 流式协议封装 |
+| 8.4 | `feat(asr-cloud): implement AsrEngine for cloud` | 实现统一 trait |
+| 8.5 | `feat(cli): transcribe --engine=cloud flag` | CLI 显式选择引擎 |
+| 8.6 | `feat(core): engine router with manual selection` | 用户配置选 local/cloud，无静默 fallback |
 
-**Step 验收**：同一句"if 条件 大括号 返回 true 大括号"在实时模式和程序员模式下输出不同；快捷键热切换。
+**Step 验收**：在 CLI 和桌面端可显式选择 local / cloud，识别结果都能粘贴。
 
 ---
 
-### Step 9：模式相关设置
+### Step 9：引擎相关设置
+
+**目标**：把 Step 8 的引擎选择和云端 API key 接入桌面设置面板。
 
 | PR | 标题 | 单一职责 |
 |---|---|---|
-| 9.1 | `feat(desktop): persist default mode` | 默认模式选择持久化 |
-| 9.2 | `feat(desktop): show current mode` | 悬浮窗显示当前模式 |
-| 9.3 | `feat(desktop): mode dropdown switch` | UI 下拉切换模式（与快捷键同步） |
+| 9.1 | `feat(desktop): persist asr engine choice` | local / cloud 选择持久化 |
+| 9.2 | `feat(desktop): api key settings` | API key 录入 + 安全存储（系统 keyring 或加密文件） |
+| 9.3 | `feat(desktop): show current engine` | 悬浮窗显示当前引擎和状态（待机/网络异常等） |
 
-**Step 验收**：重启后默认模式保持；UI 和快捷键切换状态一致。
+**Step 验收**：重启后引擎选择和 key 持久化；切换引擎无需重启进程。
 
 ---
 
-### Step 10：云端 ASR 增强（可选）
+### Step 10：AI 改写（创新点，详细设计见 §十三）
 
-**目标**：在端侧能力之上，新增云端引擎作为可选增强。**仅在普通实时输入、桌面外壳、基础设置与模式系统稳定后进入。**
+**目标**：参考 Wispr Flow / Superwhisper，在 ASR 之后挂一段可选的 LLM 改写管道：把口语化原文重写成 prompt / 邮件 / commit 等更可用的文本。
+
+> 这是当前的**草稿 Step**，PR 拆分等用户确认设计后再细化。先占位、不开工。
+
+骨架 PR（占位，待 §十三 设计确认）：
 
 | PR | 标题 | 单一职责 |
 |---|---|---|
-| 10.1 | `chore(asr-cloud): scaffold voice-asr-cloud crate` | 空 crate 结构 |
-| 10.2 | `feat(asr-cloud): add dashscope http client` | HTTP 客户端 + auth |
-| 10.3 | `feat(asr-cloud): paraformer-realtime websocket protocol` | 流式协议封装 |
-| 10.4 | `feat(asr-cloud): implement AsrEngine for cloud` | 实现统一 trait |
-| 10.5 | `feat(cli): transcribe --engine=cloud flag` | CLI 显式选择引擎 |
-| 10.6 | `feat(core): engine router with manual selection` | 默认本地，用户可手动指定云端 |
-| 10.7 | `feat(core): network probe + fallback to local` | 云端不可达时回退到端侧 |
+| 10.1 | `chore(rewrite): scaffold voice-rewrite crate` | 空 crate + trait 占位 |
+| 10.2 | `feat(rewrite): add RewritePipeline trait` | 定义 `process(text, profile) -> text` |
+| 10.3 | `feat(rewrite): identity pipeline` | 直通实现，验证集成不破坏现有链路 |
+| 10.4 | `feat(rewrite): llm-based rewrite` | 接入云端 LLM 改写 |
+| 10.5 | `feat(desktop): rewrite profile switch` | 桌面端切换改写档（关闭 / 邮件 / prompt 等） |
 
-**Step 验收**：`--engine=cloud` 走云端；拔网时自动回退本地。
+**Step 验收**：待 §十三 设计明确后回填。
 
 ---
 
@@ -367,18 +371,19 @@ PR 描述空白或与代码变更严重不符 = **无效作品**（见 §2.2）�
 
 ## 七、创新点（评审 40%）
 
-**多模式架构**——以模式作为产品架构骨架，而非散落的功能开关：
+**AI 改写管道**——参考 Wispr Flow / Superwhisper，但围绕中文场景做深：
 
-- **实时模式（默认）**：最短路径，毫秒级追求快速。端侧直出 → 粘贴
-- **程序员模式**：识别"等号箭头"→`=>`、"花括号"→`{}`、英文标点、保留代码关键字原样
-- **架构可扩展**：未来加"写作模式"（润色去口语化）、"会议模式"（自动加说话人标注）等只需新增 Mode 实现，不动核心
-- **多端 adapter 余地**：核心链路保持平台无关，Windows 桌面、未来手机端或 Web 插件只替换输入/输出/配置 adapter。
+- **核心机制**：ASR 出文本后，按用户当前选择的"改写档"再过一层 LLM，输出可直接使用的成品文本（prompt / 邮件 / commit / 总结等），而不是逐字转写
+- **不是 ASR 后处理**：和"标点修复"这种小动作不同——目标是把口语化、跳跃、自我修正的原始语音重写成结构清晰、可直接发送/粘贴的文本
+- **架构隔离**：AI 改写独立成 `voice-rewrite` crate，挂在 ASR 输出和粘贴之间；关闭改写时链路完全透明
+- **多端 adapter 余地**：核心链路保持平台无关，Windows 桌面、未来手机端或 Web 插件只替换输入/输出/配置 adapter
+
+具体设计（改写档定义、prompt 模板、流式/非流式策略、错误兜底等）见 §十三 草稿。
 
 **Demo 视频亮点**：
-1. Windows 桌面里普通实时输入：在记事本 / VS Code 中按住 `Ctrl+Alt+Space` 说话，松开后自动粘贴
-2. 全程离线运行（断网演示），凸显端侧默认的隐私与可用性优势
-3. 普通实时输入稳定后，再展示程序员模式对同一句话的不同输出：实时模式输出中文；程序员模式输出 `if 条件 { 返回 true }`
-4. 云端若接入完成，加一段"切换到云端引擎，识别同一句话精度对比"
+1. Windows 桌面里实时输入：在记事本 / VS Code 中按住快捷键说话，松开后自动粘贴
+2. 端侧 vs 云端引擎切换：同一句话识别准确率对比
+3. AI 改写演示：一段口语化、有自我修正的原始语音，分别在"关闭改写"和"改写为 prompt"两档下的输出差异
 
 ## 八、风险与应对
 
@@ -391,16 +396,17 @@ PR 描述空白或与代码变更严重不符 = **无效作品**（见 §2.2）�
 | Tauri 学习曲线 | Windows-first 悬浮窗极简，逻辑全在 Rust，前端只用静态 HTML+少 JS |
 | 手机端 / Web 插件路线不确定 | 不提前引入运行时；先把 core 状态事件、配置和文本输出抽象清楚，后续再做 adapter |
 | 模型/数据体积 | gitignore，README 写下载脚本 |
-| 云端 API key 泄漏（Step 10 启动后） | `.env` 文件 + .gitignore，README 写"复制 .env.example" |
+| 云端 API key 泄漏（Step 8/10 启动后） | `.env` 文件 + .gitignore；桌面端 key 用系统 keyring 存储，不写明文 TOML |
+| AI 改写延迟 / 失败影响实时体验 | 改写默认关闭，开启时也保留"原文兜底"——LLM 超时或失败时粘贴原始 ASR 文本，不阻塞 |
 
 ## 九、删减线（进度落后时按序砍）
 
-1. 砍 Step 10（云端 ASR）→ 端侧已经够用，作为遗憾说明
-2. 砍 Step 9（模式相关设置）→ 模式只保留快捷键或 CLI 切换
-3. 砍 Step 8 部分程序员模式细节 → 保留实时模式和最小符号替换
+1. 砍 Step 10（AI 改写）→ 创新点退化为引擎对比，作为遗憾说明
+2. 砍 Step 9（引擎相关设置 UI）→ 引擎选择只保留 TOML / CLI flag
+3. 砍 Step 8（云端 ASR）→ 端侧已经够用，作为遗憾说明
 4. 砍 Step 7 设置面板 → 退化为 TOML 配置文件
 5. 砍 Step 6 桌面外壳 → 退回 CLI + 日志
-6. **底线**：Step 1-5 必须完成，构成普通实时输入的"快捷键 → 录音 → 端侧 ASR → 剪贴板 → 粘贴"最小可演示链，并完成 Windows 至少一次人工验收
+6. **底线**：Step 1-5 必须完成，构成实时输入的"快捷键 → 录音 → 端侧 ASR → 剪贴板 → 粘贴"最小可演示链，并完成 Windows 至少一次人工验收
 
 ## 十、启动时第一批操作
 
@@ -415,7 +421,8 @@ PR 描述空白或与代码变更严重不符 = **无效作品**（见 §2.2）�
 
 1. **GitHub 仓库 URL**：用户已建仓，需提供 URL（用于 `git remote add`）
 2. **Windows 手测环境**：需要可运行 Windows 桌面的机器，提前准备 Rust toolchain、sherpa-onnx 静态库 archive、模型目录；外网下载由用户手动提供文件
-3. **云端 ASR 厂商**：Step 10 之前确定。备选**阿里云 DashScope（Paraformer-realtime-v2）**——免费额度大、与端侧 Zipformer 同源、文档清楚。当前 Step 1-9 不阻塞
+3. **云端 ASR 厂商**：Step 8 之前确定。备选**阿里云 DashScope（Paraformer-realtime-v2）**——免费额度大、与端侧 Zipformer 同源、文档清楚。当前 Step 1-7 不阻塞
+6. **AI 改写设计**：见 §十三 草稿，等用户敲定改写档清单、目标 LLM、prompt 形态后才能拆 Step 10 的 PR
 4. **Windows 开发切换时机**：Step 5 实机验收后，桌面外壳和设置面板优先直接在 Windows 上继续开发；Linux 保留为 core / CLI 纯逻辑验证环境
 5. **手机端 / Web 插件形态**：只作为后续探索方向。当前先保证 core 事件、配置和输出接口不和 Windows 桌面强耦合
 
@@ -424,7 +431,7 @@ PR 描述空白或与代码变更严重不符 = **无效作品**（见 §2.2）�
 跨平台音频项目按硬件依赖分四层，避免所有测试都需要真设备：
 
 1. **无依赖纯逻辑层**（`cargo test`，三平台 + 任意 CI 都跑）
-   - WAV 编解码、样本格式转换（f32/u16↔i16）、配置解析、后续模式系统的文本处理
+   - WAV 编解码、样本格式转换（f32/u16↔i16）、配置解析、后续 AI 改写的 prompt 构造与 mock LLM 测试
    - 当前覆盖：`voice-core` 18 个单元测试
 
 2. **Mock / 文件回放后端**（同样跑在所有平台）
@@ -439,5 +446,89 @@ PR 描述空白或与代码变更严重不符 = **无效作品**（见 §2.2）�
 
 4. **手动硬件验收**（demo 视频 + checklist）
    - Windows 优先：真麦克风、真快捷键、真剪贴板、真粘贴 —— Step 5 必须先落地
-   - Windows Tauri 悬浮窗和模式切换后续补测
+   - Windows Tauri 悬浮窗、引擎切换、AI 改写档切换后续补测
    - 写在 `docs/test-checklist.md`（Step 5 先引入 Windows 版，Step 11 完整化）
+
+---
+
+## 十三、AI 改写设计草稿（待用户细化）
+
+**目标**：参考 Wispr Flow / Superwhisper，把 ASR 输出的原始口语文本，按用户选择的"档位"重写成可直接使用的成品文本。这是 Step 10 的产品形态草稿，PR 拆分等设计敲定后再做。
+
+### 13.1 概念
+
+- **改写档（Profile）**：一组预置的改写策略，决定 LLM 怎么处理这段文本。例：
+  - `off` — 关闭改写，原样输出（等同 Step 5 行为）
+  - `clean` — 只去口语化、自我修正、嗯啊词，保留原意和语序
+  - `prompt` — 重写成一段结构清晰、给 AI agent 用的 prompt
+  - `email` — 重写成正式邮件正文
+  - `commit` — 重写成 Conventional Commit 风格的短句
+  - 后续可加 `meeting-notes` / `idea-dump` 等
+- **改写管道（RewritePipeline）**：trait，输入原文 + 当前 Profile，输出改写后文本。和 `AsrEngine` 一样 dyn-safe，方便切换实现（identity / LLM / 未来端侧小模型）。
+
+### 13.2 调用时机与链路
+
+```
+hotkey → 录音 → ASR → rewrite(profile) → clipboard → paste
+                          ↑
+                可选；profile=off 时直通
+```
+
+关键约束：
+- **改写默认关闭**。第一次跑就有 LLM 调用对新用户不友好，且会暴露需要 API key
+- **改写失败必须 fallback 到原文**，不能因为 LLM 超时就什么都不粘贴
+- **改写期间桌面状态 = `Rewriting`**（新加一个 `RealtimeState`，区别于 `Transcribing`）
+
+### 13.3 LLM 选型考虑（待用户决定）
+
+候选维度：
+- **云端通用 LLM**：Claude / GPT / Gemini / DashScope Qwen 等。优势是质量高，劣势是延迟 + 费用
+- **国内云端轻量模型**：Qwen-turbo / 豆包 / Kimi 等。延迟低、便宜，中文场景够用
+- **端侧小模型**：llama.cpp + 量化 Qwen2.5-3B 之类。完全离线，但首字延迟在中端机上可能不可接受
+
+**初步建议**：先接一个云端通用 LLM 走通形态，把"端侧小模型"作为后续优化路线。
+
+### 13.4 Prompt 设计原则
+
+- 每个 Profile 一份独立 system prompt，放在 `voice-rewrite/prompts/` 下，纯文本文件方便迭代
+- 用户原文以单独 user turn 传入，**不和 system 拼接**，避免 prompt injection
+- 输出**只要文本本体**，禁止解释、禁止 markdown 包裹、禁止"以下是改写后的：…"前缀。system prompt 里要明确约束
+- 留一个 `custom` Profile 让高级用户写自己的 system prompt（持久化到配置）
+
+### 13.5 配置形态
+
+`%APPDATA%\voice-flow\app.toml` 扩展：
+
+```toml
+model_dir = "..."
+
+[hotkey]
+ctrl = true
+alt = true
+key = "Space"
+
+[asr]
+engine = "local"  # or "cloud"
+
+[rewrite]
+enabled = false
+default_profile = "clean"
+api_key_ref = "system-keyring"  # 实际 key 不写明文
+
+[rewrite.profiles.custom]
+system_prompt = "..."
+```
+
+### 13.6 桌面 UI 增量
+
+- 悬浮窗加一个"改写档"小标签，显示当前 Profile
+- 设置面板加：开关、默认 Profile 下拉、API key 录入、自定义 prompt 编辑器
+- 状态机加 `Rewriting`，前端显示成"改写中..."
+
+### 13.7 待用户决定的设计点
+
+1. **改写档的具体清单**：上面列的 6 个够不够，要不要砍掉哪个，要不要加"翻译"类
+2. **改写是否可热切档**：录音前选 vs 录音后再决定（后者意味着粘贴会延迟到用户选完）
+3. **LLM 提供商**：先接哪家、是否复用 Step 8 的云端 ASR 厂商账号
+4. **端侧改写路线**：是否预留 `voice-rewrite-local` crate，还是先不考虑
+5. **自定义 Profile**：是否提供 UI 编辑器，还是只能改 TOML
