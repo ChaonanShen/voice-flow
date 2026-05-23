@@ -12,5 +12,11 @@ description = "CLI verification tool for the voice input pipeline"
 name = "voice-cli"
 path = "src/main.rs"
 
+[dependencies]
+voice-core = { path = "../voice-core" }
+clap = { version = "4", features = ["derive"] }
+anyhow = "1"
+humantime = "2"
+
 [lints]
 workspace = true
