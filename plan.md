@@ -7,9 +7,9 @@
 **关键设计原则**：
 - **默认模式 = 实时快速语音输入**：路径最短——ASR 直出 → 粘贴，无任何润色
 - **ASR 引擎默认端侧**：开箱即用、无网络依赖、隐私不离开设备；云端作为后期可选增强（更高准确率 / 方言扩展 / 长上下文场景）
-- **创新点 = 多模式架构**：默认"实时"模式只做转写；"程序员模式"等其他模式承载所有定制化处理（符号转写、代码标点等）
+- **创新点 = 多模式架构**：默认"实时"模式只做转写；"程序员模式"等其他模式承载所有定制化处理（符号转写、代码标点等）。执行顺序上先验证普通实时输入，再落地模式系统
 
-把"端侧默认 + 模式系统"作为产品骨架，是这版计划的架构核心。云端引擎被设计为可插拔的增强能力，而非默认依赖。
+把"端侧默认 + 模式系统"作为产品骨架，是这版计划的架构核心；但近期开发顺序先服务 Windows 上的普通实时输入验收。云端引擎被设计为可插拔的增强能力，而非默认依赖。
 
 ## 二、技术栈
 
@@ -43,7 +43,7 @@ xengineer/
 ## 四、开发步骤（Step → PR）
 
 > **粒度原则**：Step 是里程碑，每个 Step 拆成若干个**只做一件事**的细粒度 PR。
-> 主线优先把端侧最小可演示链跑通（Step 1-5），云端 Step 6 排在桌面外壳之后，作为增强项。
+> 主线优先把普通实时输入链跑通并尽快在 Windows 桌面实测（Step 1-5）。模式系统后移到基础设置之后，避免在默认实时链路稳定前引入后处理复杂度；云端作为后期可选增强。
 
 ---
 
@@ -149,27 +149,25 @@ xengineer/
 
 ---
 
-### Step 5：模式系统（创新点核心）
+### Step 5：Windows / 桌面实机验收优先
 
-**目标**：抽象出 Mode 概念，落地"实时"和"程序员"两种模式，可热切换。
+**目标**：先验证普通实时输入模式的真实可用性。重点不是新增模式，而是在 Windows 桌面环境里尽快跑通"按住快捷键说话 → 松开识别 → 写剪贴板 → 自动粘贴"。
 
 | PR | 标题 | 单一职责 |
 |---|---|---|
-| 5.1 | `feat(mode): add Mode trait` | 定义 `Mode::process(text) -> text` |
-| 5.2 | `feat(mode): implement realtime mode (passthrough)` | 实时模式 = 直通 |
-| 5.3 | `feat(mode): integrate mode dispatch into pipeline` | ASR 输出后过当前模式 |
-| 5.4 | `feat(mode): add programmer symbol map` | 符号词表（"等于号"→`=`、"花括号"→`{}` 等） |
-| 5.5 | `feat(mode): programmer mode english punctuation` | 中文标点 → 英文标点 |
-| 5.6 | `feat(mode): programmer mode keyword spacing` | 关键词去空格（`if`/`else`/`return` 等保留） |
-| 5.7 | `feat(core): mode hotkey switch` | `Ctrl+Alt+M` 循环切换模式 |
+| 5.1 | `docs: add Windows manual test checklist` | 写 Windows 首轮手测清单、模型/静态库准备、预期现象 |
+| 5.2 | `fix(core): harden Windows paste shortcut` | 如实测发现 `enigo` 粘贴键序或焦点问题，仅修 Windows 粘贴 |
+| 5.3 | `fix(core): harden Windows hotkey lifecycle` | 如实测发现按下/松开事件、重复触发或释放异常，仅修快捷键生命周期 |
+| 5.4 | `fix(core): harden Windows microphone capture` | 如实测发现 cpal 设备协商、采样率或权限问题，仅修录音路径 |
+| 5.5 | `docs: record Windows realtime smoke result` | 回写 Windows 实测结果、可复现命令、已知限制 |
 
-**Step 验收**：同一句"if 条件 大括号 返回 true 大括号"在两种模式下输出不同；快捷键热切换。
+**Step 验收**：在 Windows 的记事本 / VS Code 中运行 `voice-cli push-to-talk-transcribe --model-dir <model-dir>`，按住 `Ctrl+Alt+Space` 说普通中文，松开后文本自动出现在当前光标位置。
 
 ---
 
 ### Step 6：桌面外壳
 
-**目标**：Tauri 悬浮窗显示状态和当前模式。
+**目标**：Tauri 悬浮窗显示普通实时输入链路状态，不引入模式切换。
 
 | PR | 标题 | 单一职责 |
 |---|---|---|
@@ -177,52 +175,83 @@ xengineer/
 | 6.2 | `feat(desktop): floating window layout` | 静态 HTML 悬浮窗 |
 | 6.3 | `feat(desktop): expose state events from core` | core 向前端发"待机/录音/转写/完成"事件 |
 | 6.4 | `feat(desktop): bind state to UI indicator` | 前端监听并渲染状态 |
-| 6.5 | `feat(desktop): show current mode + last result` | 显示当前模式和最近一次识别文本 |
-| 6.6 | `feat(desktop): mode dropdown switch` | UI 下拉切换模式（与快捷键同步） |
+| 6.5 | `feat(desktop): show last transcript` | 显示最近一次识别文本 |
 
-**Step 验收**：启动桌面应用，悬浮窗显示状态、模式、识别结果。
+**Step 验收**：启动桌面应用，悬浮窗显示待机 / 录音 / 转写 / 完成状态和最近一次识别文本。
 
 ---
 
-### Step 7：云端 ASR 增强（可选）
+### Step 7：基础设置与持久化
 
-**目标**：在端侧能力之上，新增云端引擎作为可选增强。**仅在 Step 1-6 主线完成且仍有时间时进入。**
+**目标**：只做普通实时链路必需的基础配置，不做 mode 相关设置。
 
 | PR | 标题 | 单一职责 |
 |---|---|---|
-| 7.1 | `chore(asr-cloud): scaffold voice-asr-cloud crate` | 空 crate 结构 |
-| 7.2 | `feat(asr-cloud): add dashscope http client` | HTTP 客户端 + auth |
-| 7.3 | `feat(asr-cloud): paraformer-realtime websocket protocol` | 流式协议封装 |
-| 7.4 | `feat(asr-cloud): implement AsrEngine for cloud` | 实现统一 trait |
-| 7.5 | `feat(cli): transcribe --engine=cloud flag` | CLI 显式选择引擎 |
-| 7.6 | `feat(core): engine router with manual selection` | 默认本地，用户可手动指定云端 |
-| 7.7 | `feat(core): network probe + fallback to local` | 云端不可达时回退到端侧 |
+| 7.1 | `feat(desktop): config file read/write` | TOML 配置文件读写 |
+| 7.2 | `feat(desktop): persist model directory` | 模型目录持久化 |
+| 7.3 | `feat(desktop): persist hotkey setting` | 快捷键配置持久化 |
+| 7.4 | `feat(desktop): settings panel layout` | 设置面板 UI |
+| 7.5 | `feat(desktop): hot reload realtime settings` | 模型目录 / 快捷键等实时配置热生效 |
+
+**Step 验收**：重启应用后模型目录和快捷键配置仍生效；不涉及模式选择。
+
+---
+
+### Step 8：模式系统（创新点核心）
+
+**目标**：在普通实时输入稳定之后，再抽象 Mode 概念，落地"实时"和"程序员"两种模式，可热切换。
+
+| PR | 标题 | 单一职责 |
+|---|---|---|
+| 8.1 | `feat(mode): add Mode trait` | 定义 `Mode::process(text) -> text` |
+| 8.2 | `feat(mode): implement realtime mode` | 实时模式 = 直通 |
+| 8.3 | `feat(mode): integrate mode dispatch` | ASR 输出后过当前模式 |
+| 8.4 | `feat(mode): add programmer symbol map` | 符号词表（"等于号"→`=`、"花括号"→`{}` 等） |
+| 8.5 | `feat(mode): programmer english punctuation` | 中文标点 → 英文标点 |
+| 8.6 | `feat(mode): programmer keyword spacing` | 关键词去空格（`if`/`else`/`return` 等保留） |
+| 8.7 | `feat(core): mode hotkey switch` | `Ctrl+Alt+M` 循环切换模式 |
+
+**Step 验收**：同一句"if 条件 大括号 返回 true 大括号"在实时模式和程序员模式下输出不同；快捷键热切换。
+
+---
+
+### Step 9：模式相关设置
+
+| PR | 标题 | 单一职责 |
+|---|---|---|
+| 9.1 | `feat(desktop): persist default mode` | 默认模式选择持久化 |
+| 9.2 | `feat(desktop): show current mode` | 悬浮窗显示当前模式 |
+| 9.3 | `feat(desktop): mode dropdown switch` | UI 下拉切换模式（与快捷键同步） |
+
+**Step 验收**：重启后默认模式保持；UI 和快捷键切换状态一致。
+
+---
+
+### Step 10：云端 ASR 增强（可选）
+
+**目标**：在端侧能力之上，新增云端引擎作为可选增强。**仅在普通实时输入、桌面外壳、基础设置与模式系统稳定后进入。**
+
+| PR | 标题 | 单一职责 |
+|---|---|---|
+| 10.1 | `chore(asr-cloud): scaffold voice-asr-cloud crate` | 空 crate 结构 |
+| 10.2 | `feat(asr-cloud): add dashscope http client` | HTTP 客户端 + auth |
+| 10.3 | `feat(asr-cloud): paraformer-realtime websocket protocol` | 流式协议封装 |
+| 10.4 | `feat(asr-cloud): implement AsrEngine for cloud` | 实现统一 trait |
+| 10.5 | `feat(cli): transcribe --engine=cloud flag` | CLI 显式选择引擎 |
+| 10.6 | `feat(core): engine router with manual selection` | 默认本地，用户可手动指定云端 |
+| 10.7 | `feat(core): network probe + fallback to local` | 云端不可达时回退到端侧 |
 
 **Step 验收**：`--engine=cloud` 走云端；拔网时自动回退本地。
 
 ---
 
-### Step 8：设置与持久化
+### Step 11：文档与 Demo
 
 | PR | 标题 | 单一职责 |
 |---|---|---|
-| 8.1 | `feat(desktop): config file read/write` | TOML 配置文件读写 |
-| 8.2 | `feat(desktop): settings panel layout` | 设置面板 UI |
-| 8.3 | `feat(desktop): bind engine default setting` | 默认引擎选择持久化 |
-| 8.4 | `feat(desktop): bind mode default setting` | 默认模式选择持久化 |
-| 8.5 | `feat(desktop): hotkey customization` | 快捷键自定义 |
-| 8.6 | `feat(desktop): cloud api key input` | API key 加密存储 |
-| 8.7 | `feat(desktop): hot reload settings` | 配置热生效 |
-
----
-
-### Step 9：文档与 Demo
-
-| PR | 标题 | 单一职责 |
-|---|---|---|
-| 9.1 | `docs: complete README usage guide` | 完整使用文档 |
-| 9.2 | `docs: add demo script` | `docs/demo-script.md` 演示脚本 |
-| 9.3 | `docs: link demo video in README` | B 站视频链接 |
+| 11.1 | `docs: complete README usage guide` | 完整使用文档 |
+| 11.2 | `docs: add demo script` | `docs/demo-script.md` 演示脚本 |
+| 11.3 | `docs: link demo video in README` | B 站视频链接 |
 
 ---
 
@@ -305,27 +334,31 @@ PR 描述空白或与代码变更严重不符 = **无效作品**（见 §2.2）�
 - **架构可扩展**：未来加"写作模式"（润色去口语化）、"会议模式"（自动加说话人标注）等只需新增 Mode 实现，不动核心
 
 **Demo 视频亮点**：
-1. 同一句话 "if 条件 大括号 返回 true 大括号" 在两种模式下分别说一遍 → 实时模式输出中文；程序员模式输出 `if 条件 { 返回 true }`
+1. Windows 桌面里普通实时输入：在记事本 / VS Code 中按住 `Ctrl+Alt+Space` 说话，松开后自动粘贴
 2. 全程离线运行（断网演示），凸显端侧默认的隐私与可用性优势
-3. 后期若云端接入完成，加一段"切换到云端引擎，识别同一句话精度对比"
+3. 普通实时输入稳定后，再展示程序员模式对同一句话的不同输出：实时模式输出中文；程序员模式输出 `if 条件 { 返回 true }`
+4. 云端若接入完成，加一段"切换到云端引擎，识别同一句话精度对比"
 
 ## 七、风险与应对
 
 | 风险 | 应对 |
 |---|---|
 | sherpa-rs Linux 编译失败 | Step 3 关键卡点，失败则降级到子进程调用 sherpa-onnx CLI |
-| 全局快捷键 Wayland 失效 | 检测 Wayland 时退化到 D-Bus，或文档提示用 X11 |
+| Windows 全局快捷键 / 粘贴行为与 Linux 不一致 | Step 5 优先做 Windows 手测与针对性修复，先保证普通实时模式可演示 |
+| 全局快捷键 Wayland 失效 | Linux 桌面优先提示使用 X11；Wayland 支持后置，不阻塞 Windows 验收 |
 | 端侧首字延迟过高 | INT8 量化模型 + 调小 chunk size；中端机实测后定型 |
 | Tauri 学习曲线 | 悬浮窗极简，逻辑全在 Rust，前端只用静态 HTML+少 JS |
 | 模型/数据体积 | gitignore，README 写下载脚本 |
-| 云端 API key 泄漏（Step 7 启动后） | `.env` 文件 + .gitignore，README 写"复制 .env.example" |
+| 云端 API key 泄漏（Step 10 启动后） | `.env` 文件 + .gitignore，README 写"复制 .env.example" |
 
 ## 八、删减线（进度落后时按序砍）
 
-1. 砍 Step 8（设置面板）→ 退化为 TOML 配置文件
-2. 砍 Step 7（云端 ASR）→ 端侧已经够用，作为遗憾说明
-3. 砍 Step 6 部分 PR（设置面板 / 模式下拉）→ 仅保留状态指示
-4. **底线**：Step 1-5 必须完成，构成"快捷键 → 录音 → 端侧 ASR → 模式处理 → 粘贴"最小可演示链
+1. 砍 Step 10（云端 ASR）→ 端侧已经够用，作为遗憾说明
+2. 砍 Step 9（模式相关设置）→ 模式只保留快捷键或 CLI 切换
+3. 砍 Step 8 部分程序员模式细节 → 保留实时模式和最小符号替换
+4. 砍 Step 7 设置面板 → 退化为 TOML 配置文件
+5. 砍 Step 6 桌面外壳 → 退回 CLI + 日志
+6. **底线**：Step 1-5 必须完成，构成普通实时输入的"快捷键 → 录音 → 端侧 ASR → 剪贴板 → 粘贴"最小可演示链，并完成 Windows 至少一次人工验收
 
 ## 九、启动时第一批操作
 
@@ -339,16 +372,17 @@ PR 描述空白或与代码变更严重不符 = **无效作品**（见 §2.2）�
 ## 十、待确认事项
 
 1. **GitHub 仓库 URL**：用户已建仓，需提供 URL（用于 `git remote add`）
-2. **云端 ASR 厂商**：Step 7 之前确定。备选**阿里云 DashScope（Paraformer-realtime-v2）**——免费额度大、与端侧 Zipformer 同源、文档清楚。当前 Step 1-6 不阻塞
-3. **目标平台优先级**：Linux / macOS / Windows 三选一作为主开发与演示平台（影响快捷键、Tauri 打包、enigo 行为）
+2. **Windows 手测环境**：需要可运行 Windows 桌面的机器，提前准备 Rust toolchain、sherpa-onnx 静态库 archive、模型目录；外网下载由用户手动提供文件
+3. **云端 ASR 厂商**：Step 10 之前确定。备选**阿里云 DashScope（Paraformer-realtime-v2）**——免费额度大、与端侧 Zipformer 同源、文档清楚。当前 Step 1-9 不阻塞
+4. **非 Windows 平台优先级**：Windows 先验收；Linux X11 / macOS 后续补测（影响快捷键、Tauri 打包、enigo 行为）
 
 ## 十一、测试策略
 
 跨平台音频项目按硬件依赖分四层，避免所有测试都需要真设备：
 
 1. **无依赖纯逻辑层**（`cargo test`，三平台 + 任意 CI 都跑）
-   - WAV 编解码、样本格式转换（f32/u16↔i16）、模式系统的文本处理、配置解析
-   - 当前覆盖：`voice-core` 9 个单元测试
+   - WAV 编解码、样本格式转换（f32/u16↔i16）、配置解析、后续模式系统的文本处理
+   - 当前覆盖：`voice-core` 18 个单元测试
 
 2. **Mock / 文件回放后端**（同样跑在所有平台）
    - `FileCapture`（已落地，PR 2.6）从 WAV 按真实节奏喂数据，验证"录音→WAV→ASR→粘贴"整条管道
@@ -361,5 +395,6 @@ PR 描述空白或与代码变更严重不符 = **无效作品**（见 §2.2）�
    - **未落地**，待 CI 配置 PR
 
 4. **手动硬件验收**（demo 视频 + checklist）
-   - 真麦克风、真快捷键、真粘贴、Tauri 悬浮窗 —— 没法自动化
-   - 写在 `docs/test-checklist.md`（待 Step 9 引入）
+   - Windows 优先：真麦克风、真快捷键、真剪贴板、真粘贴 —— Step 5 必须先落地
+   - Tauri 悬浮窗和模式切换后续补测
+   - 写在 `docs/test-checklist.md`（Step 5 先引入 Windows 版，Step 11 完整化）
