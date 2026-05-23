@@ -1332,6 +1332,7 @@ dependencies = [
  "anyhow",
  "clap",
  "humantime",
+ "voice-asr-local",
  "voice-core",
 ]
 

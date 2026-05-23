@@ -3,10 +3,12 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
+use voice_asr_local::{StreamingZipformer, MODEL_DIR_ENV};
+use voice_core::asr::AsrEngine;
 use voice_core::capture::{AudioCapture, AudioFormat};
 use voice_core::cpal_backend::CpalCapture;
 use voice_core::file_backend::FileCapture;
-use voice_core::wav::write_pcm16_wav;
+use voice_core::wav::{read_pcm16_wav, write_pcm16_wav};
 
 #[derive(Parser)]
 #[command(name = "voice-cli", version, about = "xengineer voice input CLI")]
@@ -35,6 +37,14 @@ enum Command {
         #[arg(long)]
         input: Option<PathBuf>,
     },
+    /// 使用端侧 ASR 识别 PCM 16-bit WAV 文件。
+    Transcribe {
+        /// 输入 WAV 文件路径。
+        input: PathBuf,
+        /// sherpa-onnx Streaming Zipformer 模型目录。未提供时读取 XENGINEER_SHERPA_ZIPFORMER_MODEL_DIR。
+        #[arg(long)]
+        model_dir: Option<PathBuf>,
+    },
 }
 
 fn main() -> Result<()> {
@@ -47,6 +57,7 @@ fn main() -> Result<()> {
             channels,
             input,
         } => record(output, duration.into(), sample_rate, channels, input),
+        Command::Transcribe { input, model_dir } => transcribe(input, model_dir),
     }
 }
 
@@ -115,6 +126,31 @@ fn record(
         samples.len(),
         output.display()
     );
+    Ok(())
+}
+
+fn transcribe(input: PathBuf, model_dir: Option<PathBuf>) -> Result<()> {
+    let model_dir = model_dir
+        .or_else(|| std::env::var_os(MODEL_DIR_ENV).map(PathBuf::from))
+        .with_context(|| format!("missing --model-dir or {MODEL_DIR_ENV}"))?;
+
+    let (format, samples) = read_pcm16_wav(&input)
+        .with_context(|| format!("failed to read WAV from {}", input.display()))?;
+    eprintln!(
+        "transcribing {} ({:.2}s, {} Hz / {} ch) with {}",
+        input.display(),
+        samples.len() as f64 / (format.sample_rate as f64 * format.channels as f64),
+        format.sample_rate,
+        format.channels,
+        model_dir.display()
+    );
+
+    let engine = StreamingZipformer::from_model_dir(&model_dir)
+        .with_context(|| format!("failed to load model from {}", model_dir.display()))?;
+    let text = engine
+        .transcribe(&samples, format)
+        .context("failed to transcribe WAV")?;
+    println!("{text}");
     Ok(())
 }
 
