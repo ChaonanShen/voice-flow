@@ -6,6 +6,7 @@ use clap::{Parser, Subcommand};
 use voice_asr_local::{StreamingZipformer, MODEL_DIR_ENV};
 use voice_core::asr::AsrEngine;
 use voice_core::capture::{AudioCapture, AudioFormat};
+use voice_core::clipboard::{ClipboardWriter, SystemClipboard};
 use voice_core::cpal_backend::CpalCapture;
 use voice_core::file_backend::FileCapture;
 use voice_core::hotkey::{PushToTalkHotkey, PUSH_TO_TALK_HOTKEY_LABEL};
@@ -313,6 +314,11 @@ fn push_to_talk_transcribe(
                     let text = engine
                         .transcribe(&audio.samples, audio.format)
                         .context("failed to transcribe recording")?;
+                    let mut clipboard = SystemClipboard::new();
+                    clipboard
+                        .write_text(&text)
+                        .context("failed to write transcript to clipboard")?;
+                    eprintln!("copied transcript to clipboard");
                     println!("{text}");
                     return Ok(());
                 }
