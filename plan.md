@@ -137,6 +137,16 @@ xengineer/
 
 **Step 验收**：在编辑器中按住快捷键说话，松开后文本自动出现在光标。
 
+**实际进展（2026-05-23）**：
+
+- **4.1 已完成**：`6f617e4 feat(core): integrate global-hotkey`。`voice-core` 新增 `hotkey` 模块，注册默认 `Ctrl+Alt+Space` 并输出 `pressed` / `released`；`voice-cli listen-hotkey` 用于人工验证。
+- **4.2 已完成**：`d0cfdc3 feat(core): wire hotkey to recording start/stop`。新增 `PushToTalkRecorder` 状态机，按下启动 `AudioCapture`，松开 drop session 停止并返回 PCM；`voice-cli push-to-talk-record` 可松开后写 WAV。
+- **4.3 已完成**：`49b3c11 feat(core): pipe recording into local asr`。新增 `voice-cli push-to-talk-transcribe`，松开后把本次录音送入端侧 `StreamingZipformer` 并打印文本。
+- **4.4 已完成**：`6ec4d22 feat(core): add clipboard write via arboard`。新增 `SystemClipboard` / `ClipboardWriter`，识别结果写入系统剪贴板。
+- **4.5 已完成**：`5f583d6 feat(core): simulate paste via enigo`。新增 `SystemPaste` / `PasteSimulator`，剪贴板写入后自动发送平台粘贴快捷键；Linux 依赖使用 `enigo` 的 `x11rb` feature，避免系统 `libxdo` 依赖。
+- **自动验证通过**：`cargo test -p voice-core`（18 个测试）、`SHERPA_ONNX_ARCHIVE_DIR=/home/scn/.cache/xengineer/sherpa-onnx cargo check -p voice-cli`、`SHERPA_ONNX_ARCHIVE_DIR=/home/scn/.cache/xengineer/sherpa-onnx XENGINEER_SHERPA_ZIPFORMER_MODEL_DIR=models/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20 cargo run -p voice-cli -- transcribe models/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/test_wavs/0.wav`。
+- **待人工验收**：当前 Linux 环境 headless 且无 `DISPLAY`，无法真实触发全局快捷键、系统剪贴板和模拟粘贴。需在 X11 / Windows / macOS 桌面会话中运行 `voice-cli push-to-talk-transcribe --model-dir <model-dir>`，在编辑器里按住 `Ctrl+Alt+Space` 说话、松开后确认文本自动出现在光标。
+
 ---
 
 ### Step 5：模式系统（创新点核心）
@@ -353,4 +363,3 @@ PR 描述空白或与代码变更严重不符 = **无效作品**（见 §2.2）�
 4. **手动硬件验收**（demo 视频 + checklist）
    - 真麦克风、真快捷键、真粘贴、Tauri 悬浮窗 —— 没法自动化
    - 写在 `docs/test-checklist.md`（待 Step 9 引入）
-
