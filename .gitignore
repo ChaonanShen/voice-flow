@@ -1,0 +1,42 @@
+# ===== Rust =====
+/target
+**/target/
+Cargo.lock.bak
+*.rs.bk
+*.pdb
+
+# ===== Tauri =====
+# 桌面外壳产物（Step 6 引入后生效）
+apps/desktop/src-tauri/target/
+apps/desktop/dist/
+apps/desktop/node_modules/
+
+# ===== ASR 模型权重 =====
+# sherpa-onnx 模型体积大，仅保留 .gitkeep，模型由下载脚本拉取
+/models/*
+!/models/.gitkeep
+
+# ===== 环境变量 / 密钥 =====
+# 云端 ASR API key 等敏感信息（Step 7 引入）
+.env
+.env.*
+!.env.example
+
+# ===== IDE / 编辑器 =====
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ===== 操作系统 =====
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===== 临时与日志 =====
+*.log
+*.tmp
+/tmp/
+*.wav
+!docs/**/*.wav
