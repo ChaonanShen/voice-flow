@@ -5,7 +5,8 @@
 use std::path::{Path, PathBuf};
 
 use sherpa_onnx::{OnlineRecognizer, OnlineRecognizerConfig, OnlineStream};
-use voice_core::asr::AsrError;
+use voice_core::asr::{AsrEngine, AsrError};
+use voice_core::capture::AudioFormat;
 
 /// 默认模型目录名，与 sherpa-onnx 官方 release archive 解压后目录一致。
 pub const DEFAULT_STREAMING_ZIPFORMER_DIR: &str =
@@ -190,6 +191,82 @@ impl StreamingZipformer {
     pub fn create_stream(&self) -> OnlineStream {
         self.recognizer.create_stream()
     }
+
+    fn transcribe_mono_f32(&self, samples: &[f32], sample_rate: i32) -> Result<String, AsrError> {
+        let stream = self.create_stream();
+        stream.accept_waveform(sample_rate, samples);
+        stream.input_finished();
+
+        let max_decode_steps = max_decode_steps(samples.len(), sample_rate);
+        for _ in 0..max_decode_steps {
+            if !self.recognizer.is_ready(&stream) {
+                break;
+            }
+            self.recognizer.decode(&stream);
+        }
+
+        if self.recognizer.is_ready(&stream) {
+            return Err(AsrError::Decode(format!(
+                "decoder did not finish within {max_decode_steps} steps"
+            )));
+        }
+
+        let result = self
+            .recognizer
+            .get_result(&stream)
+            .ok_or_else(|| AsrError::Decode("missing recognizer result".to_string()))?;
+        Ok(result.text.trim().to_string())
+    }
+}
+
+impl AsrEngine for StreamingZipformer {
+    fn transcribe(&self, pcm: &[i16], format: AudioFormat) -> Result<String, AsrError> {
+        validate_audio(format, pcm)?;
+        let samples = pcm_i16_to_mono_f32(pcm, format)?;
+        self.transcribe_mono_f32(&samples, format.sample_rate as i32)
+    }
+}
+
+fn validate_audio(format: AudioFormat, pcm: &[i16]) -> Result<(), AsrError> {
+    if format.sample_rate == 0 {
+        return Err(AsrError::UnsupportedFormat(
+            "sample rate must be positive".to_string(),
+        ));
+    }
+    if format.channels == 0 {
+        return Err(AsrError::UnsupportedFormat(
+            "channels must be positive".to_string(),
+        ));
+    }
+    if pcm.len() % format.channels as usize != 0 {
+        return Err(AsrError::UnsupportedFormat(format!(
+            "{} samples is not divisible by {} channels",
+            pcm.len(),
+            format.channels
+        )));
+    }
+    Ok(())
+}
+
+fn pcm_i16_to_mono_f32(pcm: &[i16], format: AudioFormat) -> Result<Vec<f32>, AsrError> {
+    validate_audio(format, pcm)?;
+    let channels = format.channels as usize;
+    let mut out = Vec::with_capacity(pcm.len() / channels);
+    for frame in pcm.chunks_exact(channels) {
+        let sum: f32 = frame.iter().map(|&s| sample_i16_to_f32(s)).sum();
+        out.push(sum / channels as f32);
+    }
+    Ok(out)
+}
+
+fn sample_i16_to_f32(sample: i16) -> f32 {
+    sample as f32 / i16::MAX as f32
+}
+
+fn max_decode_steps(sample_count: usize, sample_rate: i32) -> usize {
+    let sample_rate = sample_rate.max(1) as usize;
+    let seconds = sample_count.div_ceil(sample_rate).max(1);
+    seconds * 100
 }
 
 fn path_to_string(path: &Path) -> Result<String, AsrError> {
@@ -260,6 +337,61 @@ mod tests {
     }
 
     #[test]
+    fn rejects_zero_channels() {
+        let err = pcm_i16_to_mono_f32(
+            &[1, 2],
+            AudioFormat {
+                sample_rate: 16_000,
+                channels: 0,
+            },
+        )
+        .unwrap_err();
+
+        assert_eq!(
+            err.to_string(),
+            "unsupported audio format: channels must be positive"
+        );
+    }
+
+    #[test]
+    fn rejects_incomplete_interleaved_frame() {
+        let err = pcm_i16_to_mono_f32(
+            &[1, 2, 3],
+            AudioFormat {
+                sample_rate: 16_000,
+                channels: 2,
+            },
+        )
+        .unwrap_err();
+
+        assert_eq!(
+            err.to_string(),
+            "unsupported audio format: 3 samples is not divisible by 2 channels"
+        );
+    }
+
+    #[test]
+    fn converts_interleaved_i16_to_mono_f32() {
+        let samples = pcm_i16_to_mono_f32(
+            &[i16::MAX, 0, 0, i16::MAX],
+            AudioFormat {
+                sample_rate: 16_000,
+                channels: 2,
+            },
+        )
+        .unwrap();
+
+        assert_eq!(samples, vec![0.5, 0.5]);
+    }
+
+    #[test]
+    fn calculates_decode_step_budget_from_input_length() {
+        assert_eq!(max_decode_steps(1, 16_000), 100);
+        assert_eq!(max_decode_steps(16_000, 16_000), 100);
+        assert_eq!(max_decode_steps(16_001, 16_000), 200);
+    }
+
+    #[test]
     fn loads_real_model_when_env_is_set() {
         let Ok(dir) = std::env::var(MODEL_DIR_ENV) else {
             return;
@@ -267,5 +399,22 @@ mod tests {
 
         let recognizer = StreamingZipformer::from_model_dir(dir).unwrap();
         let _stream = recognizer.create_stream();
+    }
+
+    #[test]
+    fn transcribes_real_model_test_wav_when_env_is_set() {
+        let Ok(dir) = std::env::var(MODEL_DIR_ENV) else {
+            return;
+        };
+
+        let wav = Path::new(&dir).join("test_wavs/0.wav");
+        let wave = sherpa_onnx::Wave::read(&path_to_string(&wav).unwrap()).unwrap();
+        let recognizer = StreamingZipformer::from_model_dir(dir).unwrap();
+
+        let text = recognizer
+            .transcribe_mono_f32(wave.samples(), wave.sample_rate())
+            .unwrap();
+
+        assert!(!text.is_empty());
     }
 }
