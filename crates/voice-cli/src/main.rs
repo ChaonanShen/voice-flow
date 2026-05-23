@@ -2,7 +2,9 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
+use voice_asr_cloud::dashscope::DASHSCOPE_API_KEY_ENV;
+use voice_asr_cloud::{CloudEngineConfig, ParaformerCloudEngine};
 use voice_asr_local::{StreamingZipformer, MODEL_DIR_ENV};
 use voice_core::asr::AsrEngine;
 use voice_core::capture::{AudioCapture, AudioFormat};
@@ -20,6 +22,21 @@ use voice_core::wav::{read_pcm16_wav, write_pcm16_wav};
 struct Cli {
     #[command(subcommand)]
     cmd: Command,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
+enum EngineKind {
+    Local,
+    Cloud,
+}
+
+impl EngineKind {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Local => "local",
+            Self::Cloud => "cloud",
+        }
+    }
 }
 
 #[derive(Subcommand)]
@@ -42,13 +59,20 @@ enum Command {
         #[arg(long)]
         input: Option<PathBuf>,
     },
-    /// 使用端侧 ASR 识别 PCM 16-bit WAV 文件。
+    /// 识别 PCM 16-bit WAV 文件。默认走端侧；`--engine cloud` 走 DashScope。
     Transcribe {
         /// 输入 WAV 文件路径。
         input: PathBuf,
-        /// sherpa-onnx Streaming Zipformer 模型目录。未提供时读取 VOICE_FLOW_SHERPA_ZIPFORMER_MODEL_DIR。
+        /// 选择 ASR 引擎：`local`（默认）或 `cloud`（DashScope Paraformer-realtime-v2）。
+        #[arg(long, value_enum, default_value_t = EngineKind::Local)]
+        engine: EngineKind,
+        /// sherpa-onnx Streaming Zipformer 模型目录（仅 `--engine local` 使用）。
+        /// 未提供时读取 VOICE_FLOW_SHERPA_ZIPFORMER_MODEL_DIR。
         #[arg(long)]
         model_dir: Option<PathBuf>,
+        /// DashScope API key（仅 `--engine cloud` 使用）。未提供时读取 DASHSCOPE_API_KEY。
+        #[arg(long)]
+        api_key: Option<String>,
     },
     /// 注册默认全局快捷键并打印按下/松开事件。
     ListenHotkey,
@@ -93,7 +117,12 @@ fn main() -> Result<()> {
             channels,
             input,
         } => record(output, duration.into(), sample_rate, channels, input),
-        Command::Transcribe { input, model_dir } => transcribe(input, model_dir),
+        Command::Transcribe {
+            input,
+            engine,
+            model_dir,
+            api_key,
+        } => transcribe(input, engine, model_dir, api_key),
         Command::ListenHotkey => listen_hotkey(),
         Command::PushToTalkRecord {
             output,
@@ -178,26 +207,26 @@ fn record(
     Ok(())
 }
 
-fn transcribe(input: PathBuf, model_dir: Option<PathBuf>) -> Result<()> {
-    let model_dir = model_dir
-        .or_else(|| std::env::var_os(MODEL_DIR_ENV).map(PathBuf::from))
-        .with_context(|| format!("missing --model-dir or {MODEL_DIR_ENV}"))?;
-
+fn transcribe(
+    input: PathBuf,
+    engine_kind: EngineKind,
+    model_dir: Option<PathBuf>,
+    api_key: Option<String>,
+) -> Result<()> {
     let state = RealtimeStateEvent::new(RealtimeState::Transcribing);
     eprintln!("state: {}", state.state.label());
     let (format, samples) = read_pcm16_wav(&input)
         .with_context(|| format!("failed to read WAV from {}", input.display()))?;
     eprintln!(
-        "transcribing {} ({:.2}s, {} Hz / {} ch) with {}",
+        "transcribing {} ({:.2}s, {} Hz / {} ch) with engine={}",
         input.display(),
         samples.len() as f64 / (format.sample_rate as f64 * format.channels as f64),
         format.sample_rate,
         format.channels,
-        model_dir.display()
+        engine_kind.label(),
     );
 
-    let engine = StreamingZipformer::from_model_dir(&model_dir)
-        .with_context(|| format!("failed to load model from {}", model_dir.display()))?;
+    let engine = build_engine(engine_kind, model_dir, api_key)?;
     let text = engine
         .transcribe(&samples, format)
         .context("failed to transcribe WAV")?;
@@ -205,6 +234,35 @@ fn transcribe(input: PathBuf, model_dir: Option<PathBuf>) -> Result<()> {
     eprintln!("state: {}", completed.state.label());
     println!("{text}");
     Ok(())
+}
+
+fn build_engine(
+    kind: EngineKind,
+    model_dir: Option<PathBuf>,
+    api_key: Option<String>,
+) -> Result<Box<dyn AsrEngine>> {
+    match kind {
+        EngineKind::Local => {
+            let model_dir = model_dir
+                .or_else(|| std::env::var_os(MODEL_DIR_ENV).map(PathBuf::from))
+                .with_context(|| format!("missing --model-dir or {MODEL_DIR_ENV}"))?;
+            eprintln!("local model dir: {}", model_dir.display());
+            let engine = StreamingZipformer::from_model_dir(&model_dir)
+                .with_context(|| format!("failed to load model from {}", model_dir.display()))?;
+            Ok(Box::new(engine))
+        }
+        EngineKind::Cloud => {
+            let api_key = api_key
+                .or_else(|| std::env::var(DASHSCOPE_API_KEY_ENV).ok())
+                .filter(|k| !k.trim().is_empty())
+                .with_context(|| format!("missing --api-key or {DASHSCOPE_API_KEY_ENV}"))?;
+            let config = CloudEngineConfig::dashscope(api_key);
+            let engine = ParaformerCloudEngine::from_config(&config)
+                .context("failed to initialize cloud engine")?;
+            eprintln!("cloud provider: dashscope paraformer-realtime-v2");
+            Ok(Box::new(engine))
+        }
+    }
 }
 
 fn listen_hotkey() -> Result<()> {
