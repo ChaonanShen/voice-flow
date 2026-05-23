@@ -16,7 +16,7 @@ use voice_core::state::{RealtimeState, RealtimeStateEvent};
 use voice_core::wav::{read_pcm16_wav, write_pcm16_wav};
 
 #[derive(Parser)]
-#[command(name = "voice-cli", version, about = "xengineer voice input CLI")]
+#[command(name = "voice-cli", version, about = "voice-flow voice input CLI")]
 struct Cli {
     #[command(subcommand)]
     cmd: Command,
@@ -46,7 +46,7 @@ enum Command {
     Transcribe {
         /// 输入 WAV 文件路径。
         input: PathBuf,
-        /// sherpa-onnx Streaming Zipformer 模型目录。未提供时读取 XENGINEER_SHERPA_ZIPFORMER_MODEL_DIR。
+        /// sherpa-onnx Streaming Zipformer 模型目录。未提供时读取 VOICE_FLOW_SHERPA_ZIPFORMER_MODEL_DIR。
         #[arg(long)]
         model_dir: Option<PathBuf>,
     },
@@ -68,7 +68,7 @@ enum Command {
     },
     /// 按住默认快捷键录音，松开后使用端侧 ASR 打印文本。
     PushToTalkTranscribe {
-        /// sherpa-onnx Streaming Zipformer 模型目录。未提供时读取 XENGINEER_SHERPA_ZIPFORMER_MODEL_DIR。
+        /// sherpa-onnx Streaming Zipformer 模型目录。未提供时读取 VOICE_FLOW_SHERPA_ZIPFORMER_MODEL_DIR。
         #[arg(long)]
         model_dir: Option<PathBuf>,
         /// 采样率（Hz）。设备不支持时会回退到最近值。

@@ -78,7 +78,7 @@ fn start_runtime(app: AppHandle, state: State<'_, DesktopState>) -> Result<(), S
     }
 
     thread::Builder::new()
-        .name("xengineer-realtime".to_string())
+        .name("voice-flow-realtime".to_string())
         .spawn(move || runtime_loop(app, runtime))
         .map_err(|e| format!("failed to start runtime: {e}"))?;
 
@@ -111,7 +111,7 @@ fn main() {
             Ok(())
         })
         .run(tauri::generate_context!())
-        .expect("failed to run xengineer desktop app");
+        .expect("failed to run voice-flow desktop app");
 }
 
 fn runtime_loop(app: AppHandle, runtime: RuntimeHandle) {
@@ -317,7 +317,7 @@ fn workspace_root() -> Option<PathBuf> {
 fn config_path() -> PathBuf {
     dirs::config_dir()
         .unwrap_or_else(|| PathBuf::from("."))
-        .join("xengineer")
+        .join("voice-flow")
         .join("app.toml")
 }
 

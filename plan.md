@@ -35,7 +35,7 @@
 ## 四、项目结构
 
 ```
-xengineer/
+voice-flow/
 ├── README.md / LICENSE / .gitignore
 ├── Cargo.toml (workspace)
 ├── crates/
@@ -122,14 +122,14 @@ xengineer/
 
 - **3.3 已完成**：`7af4564 chore(asr-local): add sherpa-onnx dependency`。`voice-asr-local` 引入官方 `sherpa-onnx = 1.13.2`，同步更新 `Cargo.lock`，并把 README / plan 中的 ASR 绑定从 `sherpa-rs` 改为官方 `sherpa-onnx` Rust binding。
 - **3.4 已完成**：`d040d37 feat(asr-local): load streaming zipformer model`。新增 `StreamingZipformerModel` / `StreamingZipformerOptions` / `StreamingZipformer::from_model_dir`，校验 `encoder` / `decoder` / `joiner` / `tokens` 必需文件，并实际创建 sherpa `OnlineRecognizer`。
-- **验证通过**：`SHERPA_ONNX_ARCHIVE_DIR=/home/scn/.cache/xengineer/sherpa-onnx cargo build -p voice-asr-local`、`SHERPA_ONNX_ARCHIVE_DIR=/home/scn/.cache/xengineer/sherpa-onnx cargo test --workspace`。
-- **真实模型验证通过**：将模型 archive 解压到 `/tmp/xengineer-models` 后，设置 `XENGINEER_SHERPA_ZIPFORMER_MODEL_DIR=/tmp/xengineer-models/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20`，`cargo test -p voice-asr-local loads_real_model_when_env_is_set -- --nocapture` 能完成 recognizer 初始化并创建 stream。
+- **验证通过**：`SHERPA_ONNX_ARCHIVE_DIR=/home/scn/.cache/voice-flow/sherpa-onnx cargo build -p voice-asr-local`、`SHERPA_ONNX_ARCHIVE_DIR=/home/scn/.cache/voice-flow/sherpa-onnx cargo test --workspace`。
+- **真实模型验证通过**：将模型 archive 解压到 `/tmp/voice-flow-models` 后，设置 `VOICE_FLOW_SHERPA_ZIPFORMER_MODEL_DIR=/tmp/voice-flow-models/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20`，`cargo test -p voice-asr-local loads_real_model_when_env_is_set -- --nocapture` 能完成 recognizer 初始化并创建 stream。
 - **遗留点**：`cargo fmt --all --check` 仍会因历史 `voice-core` 文件换行格式失败；未混入 3.3 / 3.4，建议后续单独开小 PR 处理。
 - **3.5 已完成**：`4c145f8 feat(asr-local): implement non-streaming transcribe`。`StreamingZipformer` 实现 `AsrEngine::transcribe`，支持 PCM 16-bit → mono f32 转换、格式校验、整段 WAV 非流式识别。
 - **3.6 已完成**：`184da38 feat(asr-local): implement streaming chunk decode`。新增 `StreamingSession`，支持 `accept_pcm` / `finish` / `text`，按 chunk 推进 sherpa online decoder。
-- **3.7 已完成**：`23caa66 feat(cli): add transcribe subcommand`。`voice-cli transcribe <wav> --model-dir <dir>` 可读取 PCM 16-bit WAV 并输出识别文本；未传 `--model-dir` 时读取 `XENGINEER_SHERPA_ZIPFORMER_MODEL_DIR`。
-- **3.8 已完成**：`ae51b2a docs: add model download script`。新增 `scripts/download-models.sh`，缓存 sherpa 静态库和模型 archive 到 `$HOME/.cache/xengineer/sherpa-onnx`，默认解压模型到 `models/`，并更新 README 构建/转写用法。
-- **Step 3 最终验证通过**：`SHERPA_ONNX_ARCHIVE_DIR=/home/scn/.cache/xengineer/sherpa-onnx cargo test --workspace` 全过；`cargo run -p voice-cli -- transcribe models/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/test_wavs/0.wav` 输出文本：`昨天是 MONDAY TODAY IS LIBR THE DAY AFTER TOMORROW是星期三`。
+- **3.7 已完成**：`23caa66 feat(cli): add transcribe subcommand`。`voice-cli transcribe <wav> --model-dir <dir>` 可读取 PCM 16-bit WAV 并输出识别文本；未传 `--model-dir` 时读取 `VOICE_FLOW_SHERPA_ZIPFORMER_MODEL_DIR`。
+- **3.8 已完成**：`ae51b2a docs: add model download script`。新增 `scripts/download-models.sh`，缓存 sherpa 静态库和模型 archive 到 `$HOME/.cache/voice-flow/sherpa-onnx`，默认解压模型到 `models/`，并更新 README 构建/转写用法。
+- **Step 3 最终验证通过**：`SHERPA_ONNX_ARCHIVE_DIR=/home/scn/.cache/voice-flow/sherpa-onnx cargo test --workspace` 全过；`cargo run -p voice-cli -- transcribe models/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/test_wavs/0.wav` 输出文本：`昨天是 MONDAY TODAY IS LIBR THE DAY AFTER TOMORROW是星期三`。
 
 ---
 
@@ -154,7 +154,7 @@ xengineer/
 - **4.3 已完成**：`49b3c11 feat(core): pipe recording into local asr`。新增 `voice-cli push-to-talk-transcribe`，松开后把本次录音送入端侧 `StreamingZipformer` 并打印文本。
 - **4.4 已完成**：`6ec4d22 feat(core): add clipboard write via arboard`。新增 `SystemClipboard` / `ClipboardWriter`，识别结果写入系统剪贴板。
 - **4.5 已完成**：`5f583d6 feat(core): simulate paste via enigo`。新增 `SystemPaste` / `PasteSimulator`，剪贴板写入后自动发送平台粘贴快捷键；Linux 依赖使用 `enigo` 的 `x11rb` feature，避免系统 `libxdo` 依赖。
-- **自动验证通过**：`cargo test -p voice-core`（18 个测试）、`SHERPA_ONNX_ARCHIVE_DIR=/home/scn/.cache/xengineer/sherpa-onnx cargo check -p voice-cli`、`SHERPA_ONNX_ARCHIVE_DIR=/home/scn/.cache/xengineer/sherpa-onnx XENGINEER_SHERPA_ZIPFORMER_MODEL_DIR=models/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20 cargo run -p voice-cli -- transcribe models/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/test_wavs/0.wav`。
+- **自动验证通过**：`cargo test -p voice-core`（18 个测试）、`SHERPA_ONNX_ARCHIVE_DIR=/home/scn/.cache/voice-flow/sherpa-onnx cargo check -p voice-cli`、`SHERPA_ONNX_ARCHIVE_DIR=/home/scn/.cache/voice-flow/sherpa-onnx VOICE_FLOW_SHERPA_ZIPFORMER_MODEL_DIR=models/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20 cargo run -p voice-cli -- transcribe models/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/test_wavs/0.wav`。
 - **待人工验收**：当前 Linux 环境不承担桌面链路验收，无法真实判断 Windows 全局快捷键、系统剪贴板和模拟粘贴行为。需在 Windows 原生桌面运行 `voice-cli push-to-talk-transcribe --model-dir <model-dir>`，在编辑器里按住 `Ctrl+Alt+Space` 说话、松开后确认文本自动出现在光标。
 
 ---
@@ -181,7 +181,7 @@ xengineer/
 
 **实际进展（2026-05-23）**：
 
-- **5.1 已完成**：`908e344 docs: add Windows testing guide`。新增 `WINDOWS_TESTING.md`，覆盖 Windows 原生环境准备、Windows 版 sherpa 静态库与模型准备、CLI 编译、WAV 转写、麦克风录音、全局快捷键和完整链路手测步骤。
+- **5.1 已完成**：`908e344 docs: add Windows testing guide`。新增 `windows_testing.md`，覆盖 Windows 原生环境准备、Windows 版 sherpa 静态库与模型准备、CLI 编译、WAV 转写、麦克风录音、全局快捷键和完整链路手测步骤。
 - **5.1 补充完成**：Windows 指南已补充离线 archive 准备方式，测试机无法访问 GitHub 时由用户在可联网环境下载 `sherpa-onnx-v1.13.2-win-x64-static-MT-Release-lib.tar.bz2` 和模型 archive 后复制到本机缓存目录。
 - **5.2 / 5.3 / 5.4 已由 Windows 实测驱动修正到桌面链路**：桌面端改用 Tauri 官方 `global-shortcut` 插件注册全局快捷键；Tauri v2 补 `capabilities/default.json`，允许前端监听状态事件；`CpalCapture` 从“必须单声道”改为“优先单声道，不支持时回退到设备可用通道数”，解决 Windows 默认麦克风只暴露双声道输入时报 `no input config matches channels=1` 的问题。
 - **5.5 已完成首轮桌面实测记录**：Windows 原生 Git Bash / MSVC 环境下，`apps/desktop/src-tauri` 运行 `cargo run`，按住 `Ctrl+Alt+Space` 能调用麦克风，松开后端侧 ASR 转写，悬浮窗显示最近文本，并自动写入剪贴板 / 粘贴到当前光标位置。
@@ -208,7 +208,7 @@ xengineer/
 - **6.1 / 6.2 已完成**：Windows-first Tauri v2 应用骨架已在 `apps/desktop/` 落地，包含无边框置顶悬浮窗、状态区域、最近一次识别文本区域和设置入口。
 - **6.3 已完成核心类型**：`voice-core` 新增 `RealtimeState` / `RealtimeStateEvent`，CLI 已开始输出状态日志，供桌面 / 手机 / Web adapter 复用。
 - **6.4 / 6.5 已完成首版接入**：桌面后端常驻运行快捷键、录音、端侧 ASR、剪贴板和自动粘贴链路；前端监听 `realtime-state` / `runtime-error`，显示待机 / 录音 / 转写 / 完成 / 出错状态和最近一次识别文本。
-- **自动验证通过**：Windows MSVC 环境下 `apps/desktop/src-tauri` 可完成 `cargo build`，并能启动 `target/debug/xengineer-desktop.exe` 保持运行；`cargo test --workspace` 通过。
+- **自动验证通过**：Windows MSVC 环境下 `apps/desktop/src-tauri` 可完成 `cargo build`，并能启动 `target/debug/voice-flow-desktop.exe` 保持运行；`cargo test --workspace` 通过。
 - **Windows 人工验收通过**：启动桌面应用后，按下 `Ctrl+Alt+Space` 会调用麦克风并进入录音链路；松开后完成端侧转写，悬浮窗“最近文本”更新，文本自动写入剪贴板并粘贴到当前光标位置。
 - **已知修复项**：补齐 Tauri v2 capability 后解决 `event.listen not allowed`；桌面全局快捷键改走 Tauri `global-shortcut` 插件，避免后台线程直接注册 Windows 热键；录音后端支持麦克风通道数回退。
 
@@ -231,8 +231,8 @@ xengineer/
 **实际进展（2026-05-23）**：
 
 - **7.1 已完成核心实现**：`voice-core` 新增 `AppConfig` / `HotkeyConfig`，支持 TOML 读写、默认值回填和快捷键标签生成；对应单元测试已通过。
-- **7.2 / 7.3 / 7.4 已完成首版接入**：桌面设置面板可编辑模型目录和快捷键组合，并通过 Tauri command 写入 `%APPDATA%\xengineer\app.toml`。
-- **7.5 已完成首版接入并通过基础链路验收**：保存设置后后端会请求 runtime 重启，重新加载模型目录并重新注册热键；无需关闭桌面程序。默认配置写入 `%APPDATA%\xengineer\app.toml`。
+- **7.2 / 7.3 / 7.4 已完成首版接入**：桌面设置面板可编辑模型目录和快捷键组合，并通过 Tauri command 写入 `%APPDATA%\voice-flow\app.toml`。
+- **7.5 已完成首版接入并通过基础链路验收**：保存设置后后端会请求 runtime 重启，重新加载模型目录并重新注册热键；无需关闭桌面程序。默认配置写入 `%APPDATA%\voice-flow\app.toml`。
 - **后续增强**：当前模型目录先用文本框输入，后续可补原生目录选择器；热键冲突或非法按键会通过运行时错误展示，需要基于更多实测再决定是否做更强的保存前校验。
 
 ---

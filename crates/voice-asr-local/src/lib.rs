@@ -13,7 +13,7 @@ pub const DEFAULT_STREAMING_ZIPFORMER_DIR: &str =
     "sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20";
 
 /// 可选真实模型加载测试使用的环境变量。
-pub const MODEL_DIR_ENV: &str = "XENGINEER_SHERPA_ZIPFORMER_MODEL_DIR";
+pub const MODEL_DIR_ENV: &str = "VOICE_FLOW_SHERPA_ZIPFORMER_MODEL_DIR";
 
 const ENCODER_FILE: &str = "encoder-epoch-99-avg-1.int8.onnx";
 const DECODER_FILE: &str = "decoder-epoch-99-avg-1.onnx";

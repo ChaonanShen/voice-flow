@@ -1,4 +1,4 @@
-# xengineer · 语音输入法
+# voice-flow · 语音输入法
 
 按住快捷键说话，松开自动粘贴文本到光标位置。**端侧 ASR 默认开启**，离线可用、隐私不离开设备；云端引擎作为可选增强。
 
@@ -26,7 +26,7 @@
 ## 三、项目结构
 
 ```
-xengineer/
+voice-flow/
 ├── Cargo.toml              # workspace
 ├── crates/
 │   ├── voice-core/         # 录音 + 引擎路由 + 模式系统
@@ -45,20 +45,20 @@ xengineer/
 bash scripts/download-models.sh
 
 # 编译。sherpa-onnx build.rs 会从本地 archive 读取静态库，不需要联网下载 release 包
-export SHERPA_ONNX_ARCHIVE_DIR=$HOME/.cache/xengineer/sherpa-onnx
+export SHERPA_ONNX_ARCHIVE_DIR=$HOME/.cache/voice-flow/sherpa-onnx
 cargo build
 
 # 录音 5 秒
 cargo run -p voice-cli -- record out.wav --duration 5s
 
 # 识别 WAV
-export XENGINEER_SHERPA_ZIPFORMER_MODEL_DIR=models/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20
+export VOICE_FLOW_SHERPA_ZIPFORMER_MODEL_DIR=models/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20
 cargo run -p voice-cli -- transcribe out.wav
 ```
 
 ## 五、模型下载
 
-`models/` 目录下不入库实际权重。下载脚本默认把 archive 缓存在 `$HOME/.cache/xengineer/sherpa-onnx`，并把模型解压到 `models/`：
+`models/` 目录下不入库实际权重。下载脚本默认把 archive 缓存在 `$HOME/.cache/voice-flow/sherpa-onnx`，并把模型解压到 `models/`：
 
 ```bash
 bash scripts/download-models.sh

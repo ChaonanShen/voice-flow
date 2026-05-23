@@ -2,8 +2,8 @@
 set -euo pipefail
 
 SHERPA_VERSION="${SHERPA_VERSION:-1.13.2}"
-CACHE_DIR="${XENGINEER_SHERPA_CACHE_DIR:-$HOME/.cache/xengineer/sherpa-onnx}"
-MODELS_DIR="${XENGINEER_MODELS_DIR:-models}"
+CACHE_DIR="${VOICE_FLOW_SHERPA_CACHE_DIR:-$HOME/.cache/voice-flow/sherpa-onnx}"
+MODELS_DIR="${VOICE_FLOW_MODELS_DIR:-models}"
 EXTRACT="${EXTRACT:-1}"
 
 LIB_ARCHIVE="sherpa-onnx-v${SHERPA_VERSION}-linux-x64-static-lib.tar.bz2"
@@ -55,6 +55,6 @@ Build with local sherpa archive:
   cargo build
 
 Transcribe a bundled test WAV:
-  export XENGINEER_SHERPA_ZIPFORMER_MODEL_DIR=$MODEL_DIR
+  export VOICE_FLOW_SHERPA_ZIPFORMER_MODEL_DIR=$MODEL_DIR
   cargo run -p voice-cli -- transcribe "$MODEL_DIR/test_wavs/0.wav"
 EOF

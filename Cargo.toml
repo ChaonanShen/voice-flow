@@ -7,8 +7,8 @@ version = "0.1.0"
 edition = "2021"
 rust-version = "1.78"
 license = "Apache-2.0"
-repository = "https://github.com/ChaonanShen/xengineer"
-authors = ["xengineer contributors"]
+repository = "https://github.com/ChaonanShen/voice-flow"
+authors = ["voice-flow contributors"]
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

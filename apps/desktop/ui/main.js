@@ -104,7 +104,7 @@ saveSettings.addEventListener("click", async () => {
   }
 });
 
-window.__XENGINEER_APPLY_STATE__ = applyState;
+window.__VOICE_FLOW_APPLY_STATE__ = applyState;
 
 boot().catch((error) => {
   applyState({ state: "error", error: String(error) });

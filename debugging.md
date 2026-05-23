@@ -43,7 +43,7 @@
    Windows 桌面配置文件默认在：
 
    ```text
-   %APPDATA%\xengineer\app.toml
+   %APPDATA%\voice-flow\app.toml
    ```
 
    需要关注模型目录、快捷键配置。路径里如果有隐私信息，可以只保留关键部分。
@@ -88,7 +88,7 @@
 
 配置：
 ```toml
-粘贴 %APPDATA%\xengineer\app.toml 中相关项
+粘贴 %APPDATA%\voice-flow\app.toml 中相关项
 ```
 ````
 
@@ -147,7 +147,7 @@ apps/desktop/ui-tests/
 当前已有终端错误输出。后续建议增加结构化日志，并写到：
 
 ```text
-%APPDATA%\xengineer\logs\desktop.log
+%APPDATA%\voice-flow\logs\desktop.log
 ```
 
 这样用户不需要一直截图终端，可以直接提供最近日志。
@@ -164,7 +164,7 @@ save_last_recording = true
 开启后，每次松开快捷键，把最近一次录音保存到：
 
 ```text
-%APPDATA%\xengineer\debug\last-recording.wav
+%APPDATA%\voice-flow\debug\last-recording.wav
 ```
 
 这样可以判断问题是：
@@ -190,7 +190,7 @@ scripts/collect-windows-diagnostics.ps1
 - `cl` / MSVC 环境是否可用
 - sherpa Windows 静态库 archive 是否存在
 - 模型目录是否存在、关键文件是否齐全
-- `%APPDATA%\xengineer\app.toml`
+- `%APPDATA%\voice-flow\app.toml`
 - 最近日志
 - 最近一次录音文件路径
 

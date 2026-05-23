@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "xengineer",
+  "productName": "voice-flow",
   "version": "0.1.0",
-  "identifier": "com.xengineer.voice",
+  "identifier": "com.voiceflow.voice",
   "build": {
     "frontendDist": "../ui"
   },
@@ -10,7 +10,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "xengineer",
+        "title": "voice-flow",
         "width": 460,
         "height": 360,
         "resizable": false,

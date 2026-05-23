@@ -22,8 +22,8 @@ rustup target add x86_64-pc-windows-msvc
 ## 2. 获取代码
 
 ```powershell
-git clone <你的仓库地址> xengineer
-cd xengineer
+git clone <你的仓库地址> voice-flow
+cd voice-flow
 ```
 
 如果已经有本仓库，直接进入仓库目录即可。
@@ -40,7 +40,7 @@ cd xengineer
 如果测试机不能访问 GitHub，请先在可联网机器下载这两个 archive，再复制到 Windows 测试机：
 
 ```powershell
-$cache = "$env:USERPROFILE\.cache\xengineer\sherpa-onnx"
+$cache = "$env:USERPROFILE\.cache\voice-flow\sherpa-onnx"
 New-Item -ItemType Directory -Force $cache | Out-Null
 ```
 
@@ -50,7 +50,7 @@ New-Item -ItemType Directory -Force $cache | Out-Null
 
 ```powershell
 $version = "1.13.2"
-$cache = "$env:USERPROFILE\.cache\xengineer\sherpa-onnx"
+$cache = "$env:USERPROFILE\.cache\voice-flow\sherpa-onnx"
 $modelRoot = "models"
 $libBase = "https://github.com/k2-fsa/sherpa-onnx/releases/download/v$version"
 $modelBase = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models"
@@ -69,7 +69,7 @@ tar -xjf "$cache\$model" -C $modelRoot
 如果文件已经由其他机器复制到 `$cache`，执行下面的解压命令：
 
 ```powershell
-$cache = "$env:USERPROFILE\.cache\xengineer\sherpa-onnx"
+$cache = "$env:USERPROFILE\.cache\voice-flow\sherpa-onnx"
 $modelRoot = "models"
 $model = "sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20.tar.bz2"
 
@@ -80,7 +80,7 @@ tar -xjf "$cache\$model" -C $modelRoot
 ## 4. 编译 CLI
 
 ```powershell
-$env:SHERPA_ONNX_ARCHIVE_DIR = "$env:USERPROFILE\.cache\xengineer\sherpa-onnx"
+$env:SHERPA_ONNX_ARCHIVE_DIR = "$env:USERPROFILE\.cache\voice-flow\sherpa-onnx"
 
 cargo build -p voice-cli
 cargo test -p voice-core
@@ -100,7 +100,7 @@ cargo build -p voice-cli --release
 
 ```powershell
 $modelDir = "$PWD\models\sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20"
-$env:XENGINEER_SHERPA_ZIPFORMER_MODEL_DIR = $modelDir
+$env:VOICE_FLOW_SHERPA_ZIPFORMER_MODEL_DIR = $modelDir
 
 cargo run -p voice-cli -- transcribe "$modelDir\test_wavs\0.wav"
 ```
@@ -151,15 +151,24 @@ cargo run -p voice-cli -- push-to-talk-transcribe --model-dir "$modelDir"
 
 ```powershell
 cd apps\desktop\src-tauri
-$env:SHERPA_ONNX_ARCHIVE_DIR = "$env:USERPROFILE\.cache\xengineer\sherpa-onnx"
+$env:SHERPA_ONNX_ARCHIVE_DIR = "$env:USERPROFILE\.cache\voice-flow\sherpa-onnx"
 cargo run
 ```
+
+`cargo run` 是开发时最方便的启动方式。只要已经构建过，也可以直接启动生成的桌面程序：
+
+```powershell
+cd apps\desktop\src-tauri
+.\target\debug\voice-flow-desktop.exe
+```
+
+直接运行 exe 时，如果当前机器没有默认配置文件，请先确认 `%APPDATA%\voice-flow\app.toml` 里已经写入正确模型目录，或启动后在设置面板中填写模型目录并保存。
 
 如果在 Git Bash 中运行，使用 Bash 语法设置环境变量：
 
 ```bash
 cd ~/dev/voice-flow/apps/desktop/src-tauri
-export SHERPA_ONNX_ARCHIVE_DIR="$(cygpath -w "$HOME/.cache/xengineer/sherpa-onnx")"
+export SHERPA_ONNX_ARCHIVE_DIR="$(cygpath -w "$HOME/.cache/voice-flow/sherpa-onnx")"
 cargo run
 ```
 
@@ -171,7 +180,7 @@ cargo run
 - `Ctrl` / `Alt` / `Shift` / `Win` 修饰键
 - 主按键，例如 `Space`
 
-点击保存后，桌面后端会重新加载配置并重新注册快捷键。配置文件写入 `%APPDATA%\xengineer\app.toml`。
+点击保存后，桌面后端会重新加载配置并重新注册快捷键。配置文件写入 `%APPDATA%\voice-flow\app.toml`。
 
 ## 常见问题
 
@@ -189,10 +198,12 @@ cargo run
 ### 2026-05-23 首轮桌面实测
 
 - 环境：Windows 原生桌面，Git Bash 中运行 `apps/desktop/src-tauri` 的 `cargo run`，Rust / Cargo 可正常使用，MSVC 构建环境可完成桌面构建。
-- sherpa 静态库：`%USERPROFILE%\.cache\xengineer\sherpa-onnx\sherpa-onnx-v1.13.2-win-x64-static-MT-Release-lib.tar.bz2`。
+- sherpa 静态库：`%USERPROFILE%\.cache\voice-flow\sherpa-onnx\sherpa-onnx-v1.13.2-win-x64-static-MT-Release-lib.tar.bz2`。
 - 模型目录：仓库内 `models\sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20`。
 - 结果：桌面悬浮窗可启动；按住 `Ctrl+Alt+Space` 能调用麦克风；松开后完成端侧 ASR 转写，悬浮窗显示最近文本，并自动写入剪贴板 / 粘贴到当前光标位置。
 - 已修复问题：Tauri v2 缺 capability 导致 `event.listen not allowed`；Windows 默认麦克风不支持请求的 `channels=1` 导致录音启动失败。
+
+补充：桌面应用不只可以通过 `cargo run` 启动。完成一次 `cargo build` / `cargo run` 后，也可以直接运行 `apps\desktop\src-tauri\target\debug\voice-flow-desktop.exe` 进行手测。
 
 后续完成更多 Windows 原生环境测试后，在对应 PR 描述或 `plan.md` Step 5 继续记录：
 

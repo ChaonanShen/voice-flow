@@ -1,14 +1,14 @@
 [workspace]
 
 [package]
-name = "xengineer-desktop"
+name = "voice-flow-desktop"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.78"
 license = "Apache-2.0"
-repository = "https://github.com/ChaonanShen/xengineer"
-authors = ["xengineer contributors"]
-description = "Windows-first Tauri desktop shell for xengineer"
+repository = "https://github.com/ChaonanShen/voice-flow"
+authors = ["voice-flow contributors"]
+description = "Windows-first Tauri desktop shell for voice-flow"
 build = "build.rs"
 
 [dependencies]
