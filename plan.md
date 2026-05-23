@@ -115,6 +115,11 @@ xengineer/
 - **验证通过**：`SHERPA_ONNX_ARCHIVE_DIR=/home/scn/.cache/xengineer/sherpa-onnx cargo build -p voice-asr-local`、`SHERPA_ONNX_ARCHIVE_DIR=/home/scn/.cache/xengineer/sherpa-onnx cargo test --workspace`。
 - **真实模型验证通过**：将模型 archive 解压到 `/tmp/xengineer-models` 后，设置 `XENGINEER_SHERPA_ZIPFORMER_MODEL_DIR=/tmp/xengineer-models/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20`，`cargo test -p voice-asr-local loads_real_model_when_env_is_set -- --nocapture` 能完成 recognizer 初始化并创建 stream。
 - **遗留点**：`cargo fmt --all --check` 仍会因历史 `voice-core` 文件换行格式失败；未混入 3.3 / 3.4，建议后续单独开小 PR 处理。
+- **3.5 已完成**：`4c145f8 feat(asr-local): implement non-streaming transcribe`。`StreamingZipformer` 实现 `AsrEngine::transcribe`，支持 PCM 16-bit → mono f32 转换、格式校验、整段 WAV 非流式识别。
+- **3.6 已完成**：`184da38 feat(asr-local): implement streaming chunk decode`。新增 `StreamingSession`，支持 `accept_pcm` / `finish` / `text`，按 chunk 推进 sherpa online decoder。
+- **3.7 已完成**：`23caa66 feat(cli): add transcribe subcommand`。`voice-cli transcribe <wav> --model-dir <dir>` 可读取 PCM 16-bit WAV 并输出识别文本；未传 `--model-dir` 时读取 `XENGINEER_SHERPA_ZIPFORMER_MODEL_DIR`。
+- **3.8 已完成**：`ae51b2a docs: add model download script`。新增 `scripts/download-models.sh`，缓存 sherpa 静态库和模型 archive 到 `$HOME/.cache/xengineer/sherpa-onnx`，默认解压模型到 `models/`，并更新 README 构建/转写用法。
+- **Step 3 最终验证通过**：`SHERPA_ONNX_ARCHIVE_DIR=/home/scn/.cache/xengineer/sherpa-onnx cargo test --workspace` 全过；`cargo run -p voice-cli -- transcribe models/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/test_wavs/0.wav` 输出文本：`昨天是 MONDAY TODAY IS LIBR THE DAY AFTER TOMORROW是星期三`。
 
 ---
 
