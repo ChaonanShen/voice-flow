@@ -12,6 +12,7 @@ use voice_core::file_backend::FileCapture;
 use voice_core::hotkey::{PushToTalkHotkey, PUSH_TO_TALK_HOTKEY_LABEL};
 use voice_core::paste::{PasteSimulator, SystemPaste};
 use voice_core::push_to_talk::{PushToTalkRecorder, PushToTalkRecorderEvent};
+use voice_core::state::{RealtimeState, RealtimeStateEvent};
 use voice_core::wav::{read_pcm16_wav, write_pcm16_wav};
 
 #[derive(Parser)]
@@ -182,6 +183,8 @@ fn transcribe(input: PathBuf, model_dir: Option<PathBuf>) -> Result<()> {
         .or_else(|| std::env::var_os(MODEL_DIR_ENV).map(PathBuf::from))
         .with_context(|| format!("missing --model-dir or {MODEL_DIR_ENV}"))?;
 
+    let state = RealtimeStateEvent::new(RealtimeState::Transcribing);
+    eprintln!("state: {}", state.state.label());
     let (format, samples) = read_pcm16_wav(&input)
         .with_context(|| format!("failed to read WAV from {}", input.display()))?;
     eprintln!(
@@ -198,6 +201,8 @@ fn transcribe(input: PathBuf, model_dir: Option<PathBuf>) -> Result<()> {
     let text = engine
         .transcribe(&samples, format)
         .context("failed to transcribe WAV")?;
+    let completed = RealtimeStateEvent::new(RealtimeState::Completed).with_transcript(&text);
+    eprintln!("state: {}", completed.state.label());
     println!("{text}");
     Ok(())
 }
@@ -287,6 +292,7 @@ fn push_to_talk_transcribe(
     let hotkey = PushToTalkHotkey::register_default().context("failed to register hotkey")?;
     let mut recorder = PushToTalkRecorder::new(backend, format);
 
+    eprintln!("state: {}", RealtimeState::Idle.label());
     eprintln!(
         "hold {PUSH_TO_TALK_HOTKEY_LABEL} to record, release to transcribe with {}",
         model_dir.display()
@@ -299,12 +305,14 @@ fn push_to_talk_transcribe(
                 .context("failed to handle push-to-talk recording")?
             {
                 Some(PushToTalkRecorderEvent::RecordingStarted(actual)) => {
+                    eprintln!("state: {}", RealtimeState::Recording.label());
                     eprintln!(
                         "recording started ({} Hz / {} ch)",
                         actual.sample_rate, actual.channels
                     );
                 }
                 Some(PushToTalkRecorderEvent::RecordingStopped(audio)) => {
+                    eprintln!("state: {}", RealtimeState::Transcribing.label());
                     let secs = audio.samples.len() as f64
                         / (audio.format.sample_rate as f64 * audio.format.channels as f64);
                     eprintln!(
@@ -323,6 +331,7 @@ fn push_to_talk_transcribe(
                     let mut paste = SystemPaste::new();
                     paste.paste().context("failed to simulate paste")?;
                     eprintln!("pasted transcript into focused app");
+                    eprintln!("state: {}", RealtimeState::Completed.label());
                     println!("{text}");
                     return Ok(());
                 }
