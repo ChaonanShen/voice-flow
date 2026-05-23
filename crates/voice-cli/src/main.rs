@@ -5,6 +5,7 @@ use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use voice_core::capture::{AudioCapture, AudioFormat};
 use voice_core::cpal_backend::CpalCapture;
+use voice_core::file_backend::FileCapture;
 use voice_core::wav::write_pcm16_wav;
 
 #[derive(Parser)]
@@ -29,6 +30,10 @@ enum Command {
         /// 声道数。
         #[arg(long, default_value_t = 1)]
         channels: u16,
+        /// 用 WAV 文件替代真实麦克风（适合无声卡环境与 demo 复现）。
+        /// 提供该参数时 `--sample-rate`/`--channels` 必须与文件一致。
+        #[arg(long)]
+        input: Option<PathBuf>,
     },
 }
 
@@ -40,12 +45,31 @@ fn main() -> Result<()> {
             duration,
             sample_rate,
             channels,
-        } => record(output, duration.into(), sample_rate, channels),
+            input,
+        } => record(output, duration.into(), sample_rate, channels, input),
     }
 }
 
-fn record(output: PathBuf, duration: Duration, sample_rate: u32, channels: u16) -> Result<()> {
-    let mut backend = CpalCapture::new();
+fn record(
+    output: PathBuf,
+    duration: Duration,
+    sample_rate: u32,
+    channels: u16,
+    input: Option<PathBuf>,
+) -> Result<()> {
+    let mut backend: Box<dyn AudioCapture> = match input {
+        Some(path) => {
+            eprintln!("source: file {}", path.display());
+            Box::new(
+                FileCapture::from_wav(&path)
+                    .with_context(|| format!("failed to load {}", path.display()))?,
+            )
+        }
+        None => {
+            eprintln!("source: default microphone (cpal)");
+            Box::new(CpalCapture::new())
+        }
+    };
     let session = backend
         .start(AudioFormat {
             sample_rate,
@@ -56,7 +80,7 @@ fn record(output: PathBuf, duration: Duration, sample_rate: u32, channels: u16) 
     let actual = session.format;
     if actual.sample_rate != sample_rate || actual.channels != channels {
         eprintln!(
-            "device negotiated {} Hz / {} ch (requested {} Hz / {} ch)",
+            "backend negotiated {} Hz / {} ch (requested {} Hz / {} ch)",
             actual.sample_rate, actual.channels, sample_rate, channels
         );
     }
@@ -72,7 +96,8 @@ fn record(output: PathBuf, duration: Duration, sample_rate: u32, channels: u16) 
             Ok(chunk) => samples.extend_from_slice(&chunk),
             Err(std::sync::mpsc::RecvTimeoutError::Timeout) => break,
             Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-                anyhow::bail!("capture stream disconnected before duration elapsed");
+                // 对 FileCapture，这意味着回放结束，是正常路径。
+                break;
             }
         }
     }
