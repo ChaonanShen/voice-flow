@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>xengineer</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="shell" aria-label="xengineer voice input status">
+      <section class="status-row">
+        <div class="status-dot" data-state="idle" aria-hidden="true"></div>
+        <div>
+          <p class="label">xengineer</p>
+          <h1 id="state-label">待机</h1>
+        </div>
+      </section>
+
+      <section class="transcript" aria-label="最近一次识别文本">
+        <p class="label">最近文本</p>
+        <p id="last-transcript">尚无识别结果</p>
+      </section>
+    </main>
+    <script src="./main.js"></script>
+  </body>
+</html>
