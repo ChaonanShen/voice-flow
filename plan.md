@@ -253,6 +253,17 @@ voice-flow/
 
 **Step 验收**：在 CLI 和桌面端可显式选择 local / cloud，识别结果都能粘贴。
 
+**实际进展（2026-05-23）**：
+
+- **8.1 已完成**：`68c3181 chore(asr-cloud): scaffold voice-asr-cloud crate`。新增 `voice-asr-cloud` 空 crate，提供 `CloudProvider` / `CloudEngineConfig` 占位和 `CloudAsrError`（4 个单测）。
+- **8.2 已完成**：`d68a9dc feat(asr-cloud): add dashscope http client`。`DashScopeClient` 提供 API key 校验、端点与 Bearer / `X-DashScope-DataInspection` 认证头；`map_http_status` 统一映射 HTTP 错误码（10 个单测）。
+- **8.3 已完成**：`9e63340 feat(asr-cloud): paraformer-realtime websocket protocol`。`ClientEvent` / `ServerEvent` 编解码 `run-task` / `finish-task` / `task-started` / `result-generated` / `task-finished` / `task-failed`；未知 event 显式报 `Protocol`（11 个单测）。
+- **8.4 已完成**：`e4393b0 feat(asr-cloud): implement AsrEngine for cloud`。`ParaformerCloudEngine` 用 `tokio-tungstenite` + per-call current-thread runtime 实现 `AsrEngine::transcribe`：建连 → run-task → 推 100ms 一片 PCM → finish-task → 收集所有最终句子；`CloudAsrError → AsrError` 映射（9 个单测）。
+- **8.5 已完成**：`ad70338 feat(cli): transcribe --engine=cloud flag`。`transcribe` 子命令新增 `--engine local|cloud`、`--api-key`；cloud 缺 key 直接报错不静默回退。
+- **8.6 已完成**：`c9a5006 feat(core): engine router with manual selection`。`voice-core::engine` 新增 `EngineKind` / `EngineSelection` / `resolve_engine_selection`，router 不读环境变量，env 政策留在 CLI 层（8 个单测）。
+- **自动验证通过**：`SHERPA_ONNX_ARCHIVE_DIR=... cargo test --workspace` 全过；`cargo run -p voice-cli -- transcribe ... --engine local` 输出端侧识别文本与 Step 3 一致。
+- **待人工验收**：Windows 上配置真实 `DASHSCOPE_API_KEY` 跑一次 `--engine cloud` 验证端到端识别；桌面端引擎切换在 Step 9 接入。
+
 ---
 
 ### Step 9：引擎相关设置
