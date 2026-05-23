@@ -4,3 +4,4 @@
 
 pub mod capture;
 pub mod cpal_backend;
+pub mod wav;
