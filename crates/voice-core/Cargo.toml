@@ -8,5 +8,8 @@ repository.workspace = true
 authors.workspace = true
 description = "Core engine: audio capture, ASR routing and mode pipeline"
 
+[dependencies]
+thiserror = "2"
+
 [lints]
 workspace = true

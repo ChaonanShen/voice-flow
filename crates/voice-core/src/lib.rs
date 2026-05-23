@@ -1,4 +1,5 @@
 //! voice-core
 //!
-//! 录音、ASR 引擎路由与模式管道的核心 crate。当前为骨架占位，
-//! 各子模块随后续 PR 引入。
+//! 录音、ASR 引擎路由与模式管道的核心 crate。
+
+pub mod capture;
