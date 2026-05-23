@@ -28,9 +28,20 @@ cd VoiceFlow
 
 如果已经有本仓库，直接进入仓库目录即可。
 
-## 3. 下载 Windows 版 sherpa 静态库和模型
+## 3. 准备 Windows 版 sherpa 静态库和模型
 
-当前 `scripts/download-models.sh` 默认下载 Linux 静态库，Windows 测试不要直接使用它。改用下面的 PowerShell 命令：
+当前 `scripts/download-models.sh` 默认下载 Linux 静态库，Windows 测试不要直接使用它。需要准备下面两个文件：
+
+- `sherpa-onnx-v1.13.2-win-x64-static-MT-Release-lib.tar.bz2`
+- `sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20.tar.bz2`
+
+如果测试机不能访问 GitHub，请先在可联网机器下载这两个 archive，再复制到：
+
+```powershell
+$env:USERPROFILE\.cache\xengineer\sherpa-onnx
+```
+
+如果测试机可以直接访问 GitHub，可用下面的 PowerShell 命令下载：
 
 ```powershell
 $version = "1.13.2"
@@ -48,6 +59,8 @@ Invoke-WebRequest "$base/$model" -OutFile "$cache\$model"
 
 tar -xjf "$cache\$model" -C $modelRoot
 ```
+
+如果文件已经由其他机器复制到 `$cache`，只需要执行最后一行解压模型。
 
 ## 4. 编译 CLI
 
@@ -116,3 +129,13 @@ cargo run -p voice-cli -- push-to-talk-transcribe --model-dir "$modelDir"
 - 找不到 `win-x64-static-MT-Release-lib` archive：确认下载的是 Windows archive，不是 Linux archive。
 - 快捷键注册失败：`Ctrl+Alt+Space` 可能被其他软件占用。
 - 粘贴失败：如果目标程序以管理员权限运行，`voice-cli` 也需要以管理员权限运行。
+
+## 8. 记录实测结果
+
+完成 Windows 原生环境测试后，在对应 PR 描述或 `plan.md` Step 5 记录：
+
+- Windows 版本和 Rust toolchain
+- 使用的 sherpa archive 文件名和模型目录
+- `transcribe` / `record` / `listen-hotkey` / `push-to-talk-transcribe` 的实际结果
+- 测试目标程序，例如记事本或 VS Code
+- 失败项的完整报错和复现步骤

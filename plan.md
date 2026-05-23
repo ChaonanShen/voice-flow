@@ -163,6 +163,13 @@ xengineer/
 
 **Step 验收**：在 Windows 的记事本 / VS Code 中运行 `voice-cli push-to-talk-transcribe --model-dir <model-dir>`，按住 `Ctrl+Alt+Space` 说普通中文，松开后文本自动出现在当前光标位置。
 
+**实际进展（2026-05-23）**：
+
+- **5.1 已完成**：`908e344 docs: add Windows testing guide`。新增 `WINDOWS_TESTING.md`，覆盖 Windows 原生环境准备、Windows 版 sherpa 静态库与模型准备、CLI 编译、WAV 转写、麦克风录音、全局快捷键和完整链路手测步骤。
+- **5.1 补充完成**：Windows 指南已补充离线 archive 准备方式，测试机无法访问 GitHub 时由用户在可联网环境下载 `sherpa-onnx-v1.13.2-win-x64-static-MT-Release-lib.tar.bz2` 和模型 archive 后复制到本机缓存目录。
+- **5.2 / 5.3 / 5.4 待实机结果驱动**：这三个 PR 是条件性修复，必须基于 Windows 原生环境的真实失败现象执行；当前 Linux headless 环境不能可靠判断 Windows 粘贴、全局快捷键或麦克风问题，不提前做猜测性修改。
+- **5.5 待完成**：需要 Windows 原生环境跑完 `transcribe` / `record` / `listen-hotkey` / `push-to-talk-transcribe` 后，回写实际结果、目标程序和已知限制。
+
 ---
 
 ### Step 6：桌面外壳
