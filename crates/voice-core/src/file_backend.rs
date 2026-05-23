@@ -58,8 +58,8 @@ impl AudioCapture for FileCapture {
         }
 
         let format = self.format;
-        let frames_per_chunk = ((format.sample_rate as u64 * self.chunk_ms as u64) / 1000)
-            .max(1) as usize;
+        let frames_per_chunk =
+            ((format.sample_rate as u64 * self.chunk_ms as u64) / 1000).max(1) as usize;
         let samples_per_chunk = frames_per_chunk * format.channels as usize;
         let chunk_dur = Duration::from_millis(self.chunk_ms as u64);
 

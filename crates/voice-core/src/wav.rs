@@ -96,9 +96,7 @@ pub fn read_pcm16_wav(path: impl AsRef<Path>) -> Result<(AudioFormat, Vec<PcmSam
 }
 
 /// 从任意 `Read` 读取 PCM 16-bit WAV，便于单测。
-pub fn read_pcm16_wav_from<R: Read>(
-    r: &mut R,
-) -> Result<(AudioFormat, Vec<PcmSample>), WavError> {
+pub fn read_pcm16_wav_from<R: Read>(r: &mut R) -> Result<(AudioFormat, Vec<PcmSample>), WavError> {
     let mut riff = [0u8; 12];
     r.read_exact(&mut riff)?;
     if &riff[0..4] != b"RIFF" || &riff[8..12] != b"WAVE" {
@@ -233,7 +231,9 @@ mod tests {
             sample_rate: 16_000,
             channels: 1,
         };
-        let samples: Vec<i16> = (0..1024).map(|i| ((i * 37) as i16).wrapping_mul(11)).collect();
+        let samples: Vec<i16> = (0..1024)
+            .map(|i| ((i * 37) as i16).wrapping_mul(11))
+            .collect();
         let mut buf = Vec::new();
         write_pcm16_wav_to(&mut buf, fmt, &samples).unwrap();
 
