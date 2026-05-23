@@ -22,8 +22,8 @@ rustup target add x86_64-pc-windows-msvc
 ## 2. 获取代码
 
 ```powershell
-git clone <你的仓库地址> VoiceFlow
-cd VoiceFlow
+git clone <你的仓库地址> xengineer
+cd xengineer
 ```
 
 如果已经有本仓库，直接进入仓库目录即可。
@@ -35,11 +35,16 @@ cd VoiceFlow
 - `sherpa-onnx-v1.13.2-win-x64-static-MT-Release-lib.tar.bz2`
 - `sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20.tar.bz2`
 
-如果测试机不能访问 GitHub，请先在可联网机器下载这两个 archive，再复制到：
+其中静态库 archive 属于 `v1.13.2` release；模型 archive 属于 `asr-models` release。
+
+如果测试机不能访问 GitHub，请先在可联网机器下载这两个 archive，再复制到 Windows 测试机：
 
 ```powershell
-$env:USERPROFILE\.cache\xengineer\sherpa-onnx
+$cache = "$env:USERPROFILE\.cache\xengineer\sherpa-onnx"
+New-Item -ItemType Directory -Force $cache | Out-Null
 ```
+
+复制后，`$cache` 目录里应能看到这两个 `.tar.bz2` 文件。
 
 如果测试机可以直接访问 GitHub，可用下面的 PowerShell 命令下载：
 
@@ -47,20 +52,30 @@ $env:USERPROFILE\.cache\xengineer\sherpa-onnx
 $version = "1.13.2"
 $cache = "$env:USERPROFILE\.cache\xengineer\sherpa-onnx"
 $modelRoot = "models"
-$base = "https://github.com/k2-fsa/sherpa-onnx/releases/download/v$version"
+$libBase = "https://github.com/k2-fsa/sherpa-onnx/releases/download/v$version"
+$modelBase = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models"
 
 New-Item -ItemType Directory -Force $cache, $modelRoot | Out-Null
 
 $lib = "sherpa-onnx-v$version-win-x64-static-MT-Release-lib.tar.bz2"
 $model = "sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20.tar.bz2"
 
-Invoke-WebRequest "$base/$lib" -OutFile "$cache\$lib"
-Invoke-WebRequest "$base/$model" -OutFile "$cache\$model"
+Invoke-WebRequest "$libBase/$lib" -OutFile "$cache\$lib"
+Invoke-WebRequest "$modelBase/$model" -OutFile "$cache\$model"
 
 tar -xjf "$cache\$model" -C $modelRoot
 ```
 
-如果文件已经由其他机器复制到 `$cache`，只需要执行最后一行解压模型。
+如果文件已经由其他机器复制到 `$cache`，执行下面的解压命令：
+
+```powershell
+$cache = "$env:USERPROFILE\.cache\xengineer\sherpa-onnx"
+$modelRoot = "models"
+$model = "sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20.tar.bz2"
+
+New-Item -ItemType Directory -Force $modelRoot | Out-Null
+tar -xjf "$cache\$model" -C $modelRoot
+```
 
 ## 4. 编译 CLI
 
@@ -68,7 +83,10 @@ tar -xjf "$cache\$model" -C $modelRoot
 $env:SHERPA_ONNX_ARCHIVE_DIR = "$env:USERPROFILE\.cache\xengineer\sherpa-onnx"
 
 cargo build -p voice-cli
+cargo test -p voice-core
 ```
+
+后续命令建议继续使用同一个 `Developer PowerShell for VS 2022` 窗口；如果新开窗口，需要重新设置 `SHERPA_ONNX_ARCHIVE_DIR` 和 `$modelDir`。
 
 如需 release 构建：
 
@@ -95,6 +113,8 @@ cargo run -p voice-cli -- transcribe "$modelDir\test_wavs\0.wav"
 cargo run -p voice-cli -- record out.wav --duration 5s
 cargo run -p voice-cli -- transcribe out.wav --model-dir "$modelDir"
 ```
+
+执行 `record` 后请对麦克风说一小段话；如果 `transcribe out.wav` 没有输出有效文本，先确认 `out.wav` 是否能正常播放。
 
 如果录不到声音，检查 Windows 麦克风权限：
 
@@ -123,10 +143,14 @@ cargo run -p voice-cli -- push-to-talk-transcribe --model-dir "$modelDir"
 3. 写入剪贴板
 4. 粘贴到当前光标位置
 
+当前 CLI 在完成一次按住说话识别后会退出；这是 Step 5 手测的正常行为。后续桌面外壳会再处理常驻状态。
+
 ## 常见问题
 
 - `link.exe not found`：使用 `Developer PowerShell for VS 2022`，或补装 Visual Studio Build Tools 的 C++ workload。
 - 找不到 `win-x64-static-MT-Release-lib` archive：确认下载的是 Windows archive，不是 Linux archive。
+- `SHERPA_ONNX_ARCHIVE_DIR does not contain expected archive`：确认 `$env:SHERPA_ONNX_ARCHIVE_DIR` 指向包含 `sherpa-onnx-v1.13.2-win-x64-static-MT-Release-lib.tar.bz2` 的目录。
+- 模型目录加载失败：确认 `$modelDir` 指向解压后的目录，且里面包含 `encoder-epoch-99-avg-1.int8.onnx`、`decoder-epoch-99-avg-1.onnx`、`joiner-epoch-99-avg-1.int8.onnx` 和 `tokens.txt`。
 - 快捷键注册失败：`Ctrl+Alt+Space` 可能被其他软件占用。
 - 粘贴失败：如果目标程序以管理员权限运行，`voice-cli` 也需要以管理员权限运行。
 
