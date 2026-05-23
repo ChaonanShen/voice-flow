@@ -163,6 +163,12 @@ xengineer/
 
 **目标**：先验证普通实时输入模式的真实可用性。重点不是新增模式，而是在 Windows 桌面环境里尽快跑通"按住快捷键说话 → 松开识别 → 写剪贴板 → 自动粘贴"。
 
+> 这里要分清楚：
+> - `transcribe`：只测端侧 ASR 能不能把音频转成文字
+> - `record`：只测 Windows 麦克风录音
+> - `listen-hotkey`：只测全局快捷键能不能收事件
+> - `push-to-talk-transcribe`：这才是完整实时链路，包含麦克风、热键、ASR、剪贴板和自动粘贴
+
 | PR | 标题 | 单一职责 |
 |---|---|---|
 | 5.1 | `docs: add Windows manual test checklist` | 写 Windows 首轮手测清单、模型/静态库准备、预期现象 |
@@ -184,7 +190,7 @@ xengineer/
 
 ### Step 6：Windows-first 桌面外壳
 
-**目标**：在 Windows 原生环境落地 Tauri 悬浮窗，显示普通实时输入链路状态，不引入模式切换。Linux 继续只跑 core / CLI 验证，不安装或调试 Tauri Linux 系统依赖。
+**目标**：在 Windows 原生环境落地 Tauri 悬浮窗，显示普通实时输入链路状态，不引入模式切换。这里是把 Step 5 已经跑通的实时链路包成一个窗口程序，不是把“实时转文字”这件事首次做出来。Linux 继续只跑 core / CLI 验证，不安装或调试 Tauri Linux 系统依赖。
 
 | PR | 标题 | 单一职责 |
 |---|---|---|
@@ -195,6 +201,12 @@ xengineer/
 | 6.5 | `feat(desktop): show last transcript` | 显示最近一次识别文本 |
 
 **Step 验收**：在 Windows 原生环境启动桌面应用，悬浮窗显示待机 / 录音 / 转写 / 完成状态和最近一次识别文本。Linux 本地只验证 core 事件类型和非桌面 CLI 不退化。
+
+**实际进展（2026-05-23）**：
+
+- **6.1 / 6.2 已先行落地为 scaffold**：已准备 Windows-first Tauri 骨架和静态前端页面草稿，当前不纳入 Linux 主验证路径，也不要求在 Linux 上完成桌面依赖编译。
+- **6.3 已完成核心类型**：`voice-core` 新增 `RealtimeState` / `RealtimeStateEvent`，CLI 已开始输出状态日志，供桌面 / 手机 / Web adapter 复用。
+- **6.4 / 6.5 待 Windows 前端接入**：前端还没有真正消费这些状态事件，也没有在 Windows 上跑桌面壳的实机验收。
 
 ---
 
@@ -211,6 +223,11 @@ xengineer/
 | 7.5 | `feat(desktop): hot reload realtime settings` | 模型目录 / 快捷键等实时配置热生效 |
 
 **Step 验收**：Windows 桌面应用重启后模型目录和快捷键配置仍生效；Linux 本地只跑配置解析/写回单元测试，不涉及模式选择。
+
+**实际进展（2026-05-23）**：
+
+- **7.1 已完成核心实现**：`voice-core` 新增 `AppConfig` / `HotkeyConfig`，支持 TOML 读写和默认值回填；对应单元测试已通过。
+- **7.2 / 7.3 / 7.4 / 7.5 待 Windows 桌面接入**：配置持久化已经有核心结构，但还没接到真实 Windows 设置面板和热更新流程。
 
 ---
 
