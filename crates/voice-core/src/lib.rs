@@ -10,4 +10,5 @@ pub mod file_backend;
 pub mod hotkey;
 pub mod paste;
 pub mod push_to_talk;
+pub mod state;
 pub mod wav;
