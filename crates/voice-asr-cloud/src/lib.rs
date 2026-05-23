@@ -9,6 +9,8 @@
 
 use std::time::Duration;
 
+pub mod dashscope;
+
 /// 云端 ASR 厂商。当前只有 DashScope；后续可加其他实现。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CloudProvider {
