@@ -108,6 +108,14 @@ xengineer/
 
 **Step 验收**：`voice-cli transcribe out.wav` 端侧出中文文本，无需联网。
 
+**实际进展（2026-05-23）**：
+
+- **3.3 已完成**：`7af4564 chore(asr-local): add sherpa-onnx dependency`。`voice-asr-local` 引入官方 `sherpa-onnx = 1.13.2`，同步更新 `Cargo.lock`，并把 README / plan 中的 ASR 绑定从 `sherpa-rs` 改为官方 `sherpa-onnx` Rust binding。
+- **3.4 已完成**：`d040d37 feat(asr-local): load streaming zipformer model`。新增 `StreamingZipformerModel` / `StreamingZipformerOptions` / `StreamingZipformer::from_model_dir`，校验 `encoder` / `decoder` / `joiner` / `tokens` 必需文件，并实际创建 sherpa `OnlineRecognizer`。
+- **验证通过**：`SHERPA_ONNX_ARCHIVE_DIR=/home/scn/.cache/xengineer/sherpa-onnx cargo build -p voice-asr-local`、`SHERPA_ONNX_ARCHIVE_DIR=/home/scn/.cache/xengineer/sherpa-onnx cargo test --workspace`。
+- **真实模型验证通过**：将模型 archive 解压到 `/tmp/xengineer-models` 后，设置 `XENGINEER_SHERPA_ZIPFORMER_MODEL_DIR=/tmp/xengineer-models/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20`，`cargo test -p voice-asr-local loads_real_model_when_env_is_set -- --nocapture` 能完成 recognizer 初始化并创建 stream。
+- **遗留点**：`cargo fmt --all --check` 仍会因历史 `voice-core` 文件换行格式失败；未混入 3.3 / 3.4，建议后续单独开小 PR 处理。
+
 ---
 
 ### Step 4：交互闭环（最简实时模式）
