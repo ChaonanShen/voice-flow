@@ -100,13 +100,13 @@ GUI 提升的目标不是重写核心引擎，而是补齐普通 Windows 用户�
   - Settings 里的 diagnostics 面板。
   - 托盘打开窗口、暂停 / 恢复、退出。
   - 悬浮窗模式小圆形麦克风悬浮态。
-  - 文稿模式最小编辑区入口。
+  - 文稿模式主面板入口。
   - 悬浮窗模式 / 文稿模式右键模式切换菜单。
 
 当前限制：
 
-- 文稿模式目前只是最小 `textarea` 编辑区，还没有接入 `Result -> 文稿编辑区` output adapter。
-- 文稿模式还没有完整展示“Last transcript -> Final text”差异、variants 切换和复制最终结果的工作台形态。
+- 文稿模式目前恢复为早期主面板形态，但还没有接入 `Result -> 文稿编辑区` output adapter。
+- 文稿模式还没有真正的可编辑最终文稿区，也没有完整展示“Last transcript -> Final text”差异。
 - runtime output adapter 仍以悬浮窗模式自动粘贴链路为主，尚未按模式切换外部粘贴 / 内部插入。
 - rewrite trace 还没有独立事件或完整 trace 面板，目前只展示 fallback 和耗时摘要。
 - 还没有正式打包 installer。
@@ -353,6 +353,114 @@ GUI 应主要监听事件，而不是轮询 runtime：
 - 已完成 G4.5a.5d：悬浮窗模式和文稿模式中右键弹出 Tauri 原生模式菜单，可以切换到悬浮窗模式、文稿模式或设置。
 - 悬浮窗模式设置为 non-focusable，目标是减少点击小窗时抢走外部输入框焦点；设置模式切回 focusable，保证设置表单可编辑。
 - 文稿模式 / 设置模式切回 focusable；当前自动粘贴链路仍保持悬浮窗模式现状，尚未实现按模式切换 output adapter。
+
+### G4.5b：桌面 UI 模式解耦（计划新增）
+
+目标：把悬浮窗模式、文稿模式、设置面板从 DOM / CSS / JS 状态组织上硬拆开，避免之后修改其中一个模式时影响另外两个模式。
+
+当前问题：
+
+- 两种模式曾共用 `#rewrite-chip`、`#last-transcript`、`#variant-panel`、`#runtime-error` 等全局单例元素，导致元素从一个 pane 移到另一个 pane 后，事件和 CSS 容易跟着串场。
+- CSS 里存在裸 selector，例如 `#last-transcript`、`.variant-panel`、`.result-meta`，缺少 `.document-mode` / `.floating-mode` 命名空间，导致悬浮窗隐藏规则、文稿模式展示规则互相覆盖。
+- `switchMode()` 同时处理 pane 显隐、窗口尺寸、focusable、设置返回目标和诊断刷新，职责过重。
+- Settings 当前作为第三个 mode 参与切换，但它本质上是共用设置面板；从悬浮窗进入设置和从文稿模式进入设置应该能各自返回原模式，不应依赖临时猜测。
+- Floating Input 不应渲染 transcript、variants、fallback、profile chip；这些信息应该只属于文稿模式或设置 / 诊断。
+
+目标结构：
+
+```text
+Tauri events / commands
+  -> RuntimeStore
+     - realtime state
+     - pause state
+     - rewrite config
+     - rewrite result
+     - diagnostics
+     - active mode
+     - previous content mode
+  -> renderFloatingMode(store)
+  -> renderDocumentMode(store)
+  -> renderSettingsView(store)
+```
+
+三个 UI View 的边界：
+
+| View | 负责 | 不负责 |
+|---|---|---|
+| `FloatingModeView` | 顶部拖拽条、圆形麦克风、录音 / 转写 / 改写 / 完成 / 错误颜色和动效、右键模式菜单 | transcript 文本、rewrite variants、fallback 详情、设置表单 |
+| `DocumentModeView` | 早期主面板形态：状态栏、最近文本、rewrite profile chip、fallback / latency、variants、复制 / 粘贴、runtime error；后续承载文稿编辑器和 diff | 小窗拖拽和 non-focusable 行为、设置表单 |
+| `SettingsView` | 输入配置、rewrite 配置、keyring、diagnostics、保存 / 返回 | 录音动效、最近文本展示、variants 操作 |
+
+DOM 命名约束：
+
+- 悬浮窗元素统一使用 `floating-*` id / class，例如 `floating-pane`、`floating-mic-button`、`floating-drag-handle`。
+- 文稿模式元素统一使用 `document-*` id / class，例如 `document-pane`、`document-state-label`、`document-last-text`、`document-variant-panel`。
+- 设置元素统一使用 `settings-*` id / class，例如 `settings-pane`、`settings-save-button`、`settings-message`。
+- 不再让两个模式共享同一个 DOM id。可以共享同一份 store，但每个 View 必须有自己的 DOM 节点。
+- 保留内部 mode key：`floating`、`document` 或兼容当前 `voice-pad`；用户可见文案继续使用“悬浮窗模式 / 文稿模式 / 设置”。
+
+CSS 命名约束：
+
+- 所有模式样式必须以 `.floating-mode`、`.document-mode`、`.settings-mode` 或对应 pane 根 class 开头。
+- 禁止新增裸 `#last-transcript`、`.variant-panel` 这类跨模式 selector。
+- 悬浮窗 pane 的布局只允许拖拽条和麦克风参与尺寸计算；其他信息不得进入悬浮窗 DOM。
+- 文稿模式要支持窄窗口，不允许文本溢出或挤压按钮。
+
+JS 状态组织：
+
+- 新增轻量 `RuntimeStore` 对象，集中保存运行态数据：
+
+```js
+const store = {
+  mode: "floating",
+  previousContentMode: "floating",
+  realtime: { state: "idle", transcript: "", error: "" },
+  pause: { paused: false },
+  rewrite: { enabled: false, provider: "", profile: "", keySaved: false },
+  result: { text: "", variants: {}, fallback: false, error: "", timings: {} },
+  diagnostics: null,
+};
+```
+
+- Tauri event listener 只更新 store，不直接散落修改多个 pane。
+- 每个 View 只读取自己需要的 store 字段：
+  - `renderFloatingMode(store)` 只更新麦克风按钮状态、title、暂停态。
+  - `renderDocumentMode(store)` 更新状态栏、最近文本、variants、fallback、runtime error。
+  - `renderSettingsView(store)` 更新设置表单、key 状态、diagnostics、保存消息。
+- `setMode(mode)` 只负责更新 `store.mode`，然后调用：
+  - `renderModeVisibility(store)`
+  - `applyWindowChrome(mode)`
+  - 当前 mode 的 render 函数
+- `applyWindowChrome(mode)` 单独负责窗口尺寸、focusable、always-on-top 等窗口行为。
+
+建议 PR：
+
+| PR | 标题 | 单一职责 |
+|---|---|---|
+| G4.5b.1 | `refactor(desktop): namespace desktop ui panes` | 只改 HTML id / class，把 floating、document、settings DOM 命名拆开；行为尽量不变 |
+| G4.5b.2 | `refactor(desktop): split mode render functions` | 拆出 `renderFloatingMode`、`renderDocumentMode`、`renderSettingsView`，事件先更新 store 再 render |
+| G4.5b.3 | `refactor(desktop): isolate mode styles` | CSS 收口到 `.floating-mode` / `.document-mode` / `.settings-mode`，移除跨模式裸 selector |
+| G4.5b.4 | `fix(desktop): preserve settings return mode` | 设置面板从悬浮窗进入返回悬浮窗，从文稿模式进入返回文稿模式；窗口尺寸和 focusable 单独处理 |
+| G4.5b.5 | `docs(desktop): document ui mode separation` | 更新本文实际进展、模式边界和后续约束 |
+
+执行约束：
+
+- 不碰 ASR、rewrite、clipboard、paste core。
+- 不改变现有 Tauri command / event 名称，除非只是前端变量重命名。
+- 每个 PR 都保持可运行；不做一次性大改。
+- 每个小功能完成后单独 git commit，commit message 使用 conventional commits。
+- 重构期间悬浮窗模式必须持续保持：只显示拖拽小横杠 + 圆形麦克风。
+- 重构期间文稿模式必须持续保持：状态栏、最近文本、rewrite chip、variants、fallback / latency、错误区可用。
+- 设置面板必须持续可保存输入配置、rewrite 配置和 key。
+
+验收：
+
+- 修改悬浮窗 CSS / DOM 时，不会改变文稿模式布局。
+- 修改文稿模式 variants / 最近文本时，不会让悬浮窗出现文本 bar 或其他信息面板。
+- 修改 Settings 表单时，不会影响悬浮窗麦克风尺寸和文稿模式状态区。
+- 从悬浮窗右键进入设置后返回悬浮窗；从文稿模式右键进入设置后返回文稿模式。
+- `node --check apps/desktop/ui/main.js` 通过。
+- `cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml` 通过，除非本次只改纯文档或纯 CSS/HTML 且无需后端编译。
 
 ### G5：快捷键、粘贴和 Windows 实机兼容
 
