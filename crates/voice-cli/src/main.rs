@@ -18,7 +18,9 @@ use voice_core::paste::{PasteSimulator, SystemPaste};
 use voice_core::push_to_talk::{PushToTalkRecorder, PushToTalkRecorderEvent};
 use voice_core::state::{RealtimeState, RealtimeStateEvent};
 use voice_core::wav::{read_pcm16_wav, write_pcm16_wav};
-use voice_rewrite::{Profile, RewriteSettings, DEFAULT_REWRITE_MODEL, DEFAULT_REWRITE_TIMEOUT};
+use voice_rewrite::{
+    Profile, RewriteProvider, RewriteSettings, DEFAULT_REWRITE_MODEL, DEFAULT_REWRITE_TIMEOUT,
+};
 
 #[derive(Parser)]
 #[command(name = "voice-cli", version, about = "voice-flow voice input CLI")]
@@ -85,7 +87,10 @@ enum Command {
         /// AI 改写模型名。默认 deepseek-chat。
         #[arg(long, default_value = DEFAULT_REWRITE_MODEL)]
         rewrite_model: String,
-        /// DeepSeek API key。未提供时读取 DEEPSEEK_API_KEY / .env。
+        /// AI 改写 provider。默认 deepseek。
+        #[arg(long, default_value = "deepseek", value_parser = parse_rewrite_provider)]
+        rewrite_provider: RewriteProvider,
+        /// 当前改写 provider 的 API key。未提供时读取对应环境变量 / .env。
         #[arg(long)]
         rewrite_api_key: Option<String>,
     },
@@ -97,7 +102,10 @@ enum Command {
         /// AI 改写模型名。默认 deepseek-chat。
         #[arg(long, default_value = DEFAULT_REWRITE_MODEL)]
         model: String,
-        /// DeepSeek API key。未提供时读取 DEEPSEEK_API_KEY / .env。
+        /// AI 改写 provider。默认 deepseek。
+        #[arg(long, default_value = "deepseek", value_parser = parse_rewrite_provider)]
+        provider: RewriteProvider,
+        /// 当前改写 provider 的 API key。未提供时读取对应环境变量 / .env。
         #[arg(long)]
         api_key: Option<String>,
     },
@@ -151,6 +159,7 @@ fn main() -> Result<()> {
             api_key,
             rewrite,
             rewrite_model,
+            rewrite_provider,
             rewrite_api_key,
         } => transcribe(
             input,
@@ -159,13 +168,15 @@ fn main() -> Result<()> {
             api_key,
             rewrite,
             rewrite_model,
+            rewrite_provider,
             rewrite_api_key,
         ),
         Command::Rewrite {
             profile,
             model,
+            provider,
             api_key,
-        } => rewrite_stdin(profile, model, api_key),
+        } => rewrite_stdin(profile, model, provider, api_key),
         Command::ListenHotkey => listen_hotkey(),
         Command::PushToTalkRecord {
             output,
@@ -257,6 +268,7 @@ fn transcribe(
     api_key: Option<String>,
     rewrite: Option<Profile>,
     rewrite_model: String,
+    rewrite_provider: RewriteProvider,
     rewrite_api_key: Option<String>,
 ) -> Result<()> {
     let state = RealtimeStateEvent::new(RealtimeState::Transcribing);
@@ -280,7 +292,13 @@ fn transcribe(
     let text = match rewrite {
         Some(profile) => {
             eprintln!("state: {}", RealtimeState::Rewriting.label());
-            run_rewrite_pipeline(&raw_text, profile, rewrite_model, rewrite_api_key)?
+            run_rewrite_pipeline(
+                &raw_text,
+                profile,
+                rewrite_model,
+                rewrite_provider,
+                rewrite_api_key,
+            )?
         }
         None => raw_text,
     };
@@ -290,11 +308,16 @@ fn transcribe(
     Ok(())
 }
 
-fn rewrite_stdin(profile: Profile, model: String, api_key: Option<String>) -> Result<()> {
+fn rewrite_stdin(
+    profile: Profile,
+    model: String,
+    provider: RewriteProvider,
+    api_key: Option<String>,
+) -> Result<()> {
     let mut input = String::new();
     std::io::Read::read_to_string(&mut std::io::stdin(), &mut input)
         .context("failed to read stdin")?;
-    let output = run_rewrite_pipeline(input.trim(), profile, model, api_key)?;
+    let output = run_rewrite_pipeline(input.trim(), profile, model, provider, api_key)?;
     println!("{output}");
     Ok(())
 }
@@ -303,10 +326,12 @@ fn run_rewrite_pipeline(
     text: &str,
     profile: Profile,
     model: String,
+    provider: RewriteProvider,
     api_key: Option<String>,
 ) -> Result<String> {
     let mut settings = RewriteSettings {
         enabled: profile.should_call_llm(),
+        provider,
         default_profile: profile,
         model: Some(model),
         api_key,
@@ -345,6 +370,10 @@ where
 
 fn parse_profile(value: &str) -> Result<Profile, String> {
     Profile::from_str(value).map_err(|e| e.to_string())
+}
+
+fn parse_rewrite_provider(value: &str) -> Result<RewriteProvider, String> {
+    RewriteProvider::from_str(value).map_err(|e| e.to_string())
 }
 
 /// Resolve CLI flags + env vars into a [`EngineSelection`].
