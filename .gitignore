@@ -30,6 +30,10 @@ apps/desktop/node_modules/
 *.swo
 *~
 
+# ===== Claude Code =====
+# 本地工具配置（个人权限放行清单等），不入库
+.claude/
+
 # ===== 操作系统 =====
 .DS_Store
 Thumbs.db
