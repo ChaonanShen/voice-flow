@@ -105,6 +105,7 @@ const windowSizes = {
   "voice-pad": { width: 560, height: 420 },
   settings: { width: 460, height: 360 },
 };
+const contentModes = new Set(["floating", "voice-pad"]);
 const store = {
   config: normalizeConfig(configDefaults),
   settingsTab: "input",
@@ -159,6 +160,17 @@ function renderRuntimeViews() {
   renderFloatingMode();
   renderDocumentMode();
   renderSettingsView();
+}
+
+function renderModeVisibility() {
+  modeTabs.forEach((button) => {
+    const active = button.dataset.modeTab === store.mode;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-selected", String(active));
+  });
+  modePanes.forEach((pane) => {
+    pane.hidden = pane.dataset.modePane !== store.mode;
+  });
 }
 
 function applyState(event) {
@@ -422,27 +434,29 @@ function switchSettingsTab(tab) {
   }
 }
 
-function switchMode(mode) {
+function setMode(mode) {
   if (!document.querySelector(`[data-mode-pane="${mode}"]`)) {
     return;
   }
 
-  if (mode !== "settings") {
+  if (contentModes.has(mode)) {
     store.previousContentMode = mode;
   }
   store.mode = mode;
-  void applyWindowMode(mode);
-  modeTabs.forEach((button) => {
-    const active = button.dataset.modeTab === mode;
-    button.classList.toggle("is-active", active);
-    button.setAttribute("aria-selected", String(active));
-  });
-  modePanes.forEach((pane) => {
-    pane.hidden = pane.dataset.modePane !== mode;
-  });
+  renderModeVisibility();
+  renderRuntimeViews();
+  void applyWindowChrome(mode);
   if (mode === "settings" && store.settingsTab === "diagnostics") {
     refreshDiagnosticsPanel();
   }
+}
+
+function openSettings() {
+  setMode("settings");
+}
+
+function closeSettings() {
+  setMode(store.previousContentMode);
 }
 
 function contextMenuItemsForActiveMode() {
@@ -492,7 +506,7 @@ async function showModeContextMenu(event) {
   }
 
   if (!NativeMenu || !NativeMenuItem) {
-    switchMode(items[0].mode);
+    setMode(items[0].mode);
     return;
   }
 
@@ -500,7 +514,7 @@ async function showModeContextMenu(event) {
     items.map((item) =>
       NativeMenuItem.new({
         text: item.label,
-        action: () => switchMode(item.mode),
+        action: () => setMode(item.mode),
       }),
     ),
   );
@@ -508,7 +522,7 @@ async function showModeContextMenu(event) {
   await activeContextMenu.popup(undefined, appWindow);
 }
 
-async function applyWindowMode(mode) {
+async function applyWindowChrome(mode) {
   if (!appWindow || !LogicalSize) {
     return;
   }
@@ -580,7 +594,8 @@ function updateVariantPanel() {
 }
 
 async function boot() {
-  void applyWindowMode(store.mode);
+  renderModeVisibility();
+  void applyWindowChrome(store.mode);
   applyState({ state: "idle" });
 
   if (!invoke || !listen) {
@@ -616,14 +631,18 @@ async function boot() {
 }
 
 settingsToggle.addEventListener("click", () => {
-  switchMode(store.mode === "settings" ? store.previousContentMode : "settings");
+  if (store.mode === "settings") {
+    closeSettings();
+  } else {
+    openSettings();
+  }
 });
 
-floatingSettings?.addEventListener("click", () => switchMode("settings"));
-settingsClose.addEventListener("click", () => switchMode(store.previousContentMode));
+floatingSettings?.addEventListener("click", openSettings);
+settingsClose.addEventListener("click", closeSettings);
 
 modeTabs.forEach((button) => {
-  button.addEventListener("click", () => switchMode(button.dataset.modeTab));
+  button.addEventListener("click", () => setMode(button.dataset.modeTab));
 });
 
 document.addEventListener("contextmenu", showModeContextMenu);
