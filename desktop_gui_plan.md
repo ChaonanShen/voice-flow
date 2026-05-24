@@ -468,6 +468,8 @@ const store = {
 - 已完成 G4.5b.2：`main.js` 已引入轻量 `store`，并拆出 `renderFloatingMode`、`renderDocumentMode`、`renderSettingsView`；Tauri event 先更新 store，再按 View 渲染。
 - 已完成 G4.5b.3：CSS 已按 `.document-mode`、`.floating-mode`、`.settings-mode` 收口，悬浮窗样式和文稿 / 设置样式边界更清楚。
 - 已完成 G4.5b.4：模式切换已拆为 `setMode`、`renderModeVisibility`、`applyWindowChrome`；设置面板进入 / 返回通过 `openSettings` / `closeSettings` 处理，保留进入设置前的内容模式。
+- 已完成后续 UI 修正：Tauri 窗口和 Web 根背景改为非透明浅色，避免悬浮窗模式和文稿模式出现透明底色。
+- 已完成设置面板遮挡修正：Settings pane 填满窗口可用区域，内容区改为内部滚动，并给 `AI 改写` 开关行设置稳定高度，避免顶部开关行被裁切。
 - 当前仍未完成：文稿模式真正编辑器、Result -> 文稿编辑区 output adapter、Last transcript -> Final text 差异视图。
 
 ### G5：快捷键、粘贴和 Windows 实机兼容
