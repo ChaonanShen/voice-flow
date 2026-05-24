@@ -25,6 +25,23 @@
           <span id="rewrite-chip">改写关闭</span>
         </div>
         <p id="last-transcript">尚无识别结果</p>
+        <div class="variant-panel" id="variant-panel" hidden aria-label="改写候选">
+          <div class="variant-tabs" role="tablist" aria-label="改写版本">
+            <button class="variant-tab is-active" type="button" data-variant-tab="clean">
+              Clean
+            </button>
+            <button class="variant-tab" type="button" data-variant-tab="polish">
+              Polish
+            </button>
+            <button class="variant-tab" type="button" data-variant-tab="wechat">
+              Wechat
+            </button>
+            <button class="variant-tab" type="button" data-variant-tab="bullets">
+              Bullets
+            </button>
+          </div>
+          <p id="variant-text"></p>
+        </div>
       </section>
 
       <section class="runtime-error" id="runtime-error" hidden aria-label="运行错误">

@@ -163,6 +163,63 @@ h1 {
   -webkit-line-clamp: 3;
 }
 
+.variant-panel {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  margin-top: 10px;
+}
+
+.variant-panel[hidden] {
+  display: none;
+}
+
+.variant-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 2px;
+  min-width: 0;
+  padding: 2px;
+  border: 1px solid #d8dee8;
+  border-radius: 6px;
+  background: #eef2f7;
+}
+
+.variant-tab {
+  height: 24px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #596579;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.variant-tab.is-active {
+  background: #ffffff;
+  color: #17212b;
+  box-shadow: 0 1px 2px rgba(23, 33, 43, 0.08);
+}
+
+#variant-text {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  padding: 7px 8px;
+  border: 1px solid #d8dee8;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #243344;
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: pre-line;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
 .runtime-error {
   min-width: 0;
   padding: 8px 10px;

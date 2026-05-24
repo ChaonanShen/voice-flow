@@ -31,6 +31,13 @@ const providerDefaults = {
   },
 };
 
+const mockVariants = {
+  clean: "今天下午可能因为地铁晚点会晚到十分钟，请老师不用等我。",
+  polish: "今天下午我可能因地铁晚点而晚到十分钟，烦请老师不必等候。",
+  wechat: "老师，我今天下午地铁可能晚点，大概晚到十分钟，您不用等我。",
+  bullets: "• 今天下午可能晚到十分钟\n• 原因是地铁晚点\n• 请老师不用等我",
+};
+
 const configDefaults = {
   model_dir: null,
   hotkey: {
@@ -47,6 +54,9 @@ const dot = document.querySelector(".status-dot");
 const stateLabel = document.querySelector("#state-label");
 const lastTranscript = document.querySelector("#last-transcript");
 const rewriteChip = document.querySelector("#rewrite-chip");
+const variantPanel = document.querySelector("#variant-panel");
+const variantText = document.querySelector("#variant-text");
+const variantTabs = document.querySelectorAll("[data-variant-tab]");
 const runtimeError = document.querySelector("#runtime-error");
 const runtimeErrorText = document.querySelector("#runtime-error-text");
 const settingsToggle = document.querySelector("#settings-toggle");
@@ -74,6 +84,7 @@ const invoke = window.__TAURI__?.core?.invoke;
 const listen = window.__TAURI__?.event?.listen;
 let configSnapshot = normalizeConfig(configDefaults);
 let activeSettingsTab = "input";
+let activeVariant = "clean";
 
 function applyState(event) {
   const state = event?.state ?? "idle";
@@ -189,6 +200,7 @@ function updateRewriteSummary() {
   rewriteKeySummary.textContent = meta.env;
   rewriteChip.textContent = rewriteEnabled.checked ? `改写 ${profile}` : "改写关闭";
   rewriteChip.dataset.enabled = String(rewriteEnabled.checked);
+  updateVariantPanel();
 }
 
 function switchSettingsTab(tab) {
@@ -201,6 +213,22 @@ function switchSettingsTab(tab) {
   settingsPanes.forEach((pane) => {
     pane.hidden = pane.dataset.settingsPane !== tab;
   });
+}
+
+function switchVariantTab(variant) {
+  activeVariant = variant;
+  variantTabs.forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.variantTab === variant);
+  });
+  variantText.textContent = mockVariants[variant] ?? "";
+}
+
+function updateVariantPanel() {
+  const show = rewriteEnabled.checked && rewriteProfile.value === "multi";
+  variantPanel.hidden = !show;
+  if (show) {
+    switchVariantTab(activeVariant);
+  }
 }
 
 async function boot() {
@@ -234,6 +262,9 @@ settingsTabs.forEach((button) => {
 
 rewriteEnabled.addEventListener("change", updateRewriteSummary);
 rewriteProfile.addEventListener("change", updateRewriteSummary);
+variantTabs.forEach((button) => {
+  button.addEventListener("click", () => switchVariantTab(button.dataset.variantTab));
+});
 document.querySelectorAll('input[name="rewrite-provider"]').forEach((input) => {
   input.addEventListener("change", () => {
     if (!rewriteModel.value.trim()) {
