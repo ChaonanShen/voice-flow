@@ -8,6 +8,25 @@
   </head>
   <body>
     <main class="shell" aria-label="voice-flow voice input">
+      <nav class="mode-nav" aria-label="Desktop mode">
+        <button
+          class="mode-tab is-active"
+          type="button"
+          aria-selected="true"
+          data-mode-tab="floating"
+        >
+          Floating Input
+        </button>
+        <button
+          class="mode-tab"
+          type="button"
+          aria-selected="false"
+          data-mode-tab="settings"
+        >
+          Settings
+        </button>
+      </nav>
+
       <section class="status-row">
         <div class="status-dot" data-state="idle" aria-hidden="true"></div>
         <div class="status-text">
@@ -22,46 +41,48 @@
         </button>
       </section>
 
-      <section class="transcript" aria-label="最近一次识别文本">
-        <div class="transcript-meta">
-          <p class="label">最近文本</p>
-          <span id="rewrite-chip">改写关闭</span>
-        </div>
-        <p id="last-transcript">尚无识别结果</p>
-        <div class="result-meta" id="result-meta" hidden>
-          <span id="fallback-reason"></span>
-          <span id="latency-summary"></span>
-        </div>
-        <div class="variant-panel" id="variant-panel" hidden aria-label="改写候选">
-          <div class="variant-tabs" role="tablist" aria-label="改写版本">
-            <button class="variant-tab is-active" type="button" data-variant-tab="clean">
-              Clean
-            </button>
-            <button class="variant-tab" type="button" data-variant-tab="polish">
-              Polish
-            </button>
-            <button class="variant-tab" type="button" data-variant-tab="wechat">
-              Wechat
-            </button>
-            <button class="variant-tab" type="button" data-variant-tab="bullets">
-              Bullets
-            </button>
+      <section class="mode-pane" data-mode-pane="floating" aria-label="Floating Input">
+        <section class="transcript" aria-label="最近一次识别文本">
+          <div class="transcript-meta">
+            <p class="label">最近文本</p>
+            <span id="rewrite-chip">改写关闭</span>
           </div>
-          <div class="variant-actions">
-            <button id="copy-variant" type="button">复制选中版本</button>
-            <button id="paste-variant" type="button">粘贴选中版本</button>
-            <span id="variant-action-status"></span>
+          <p id="last-transcript">尚无识别结果</p>
+          <div class="result-meta" id="result-meta" hidden>
+            <span id="fallback-reason"></span>
+            <span id="latency-summary"></span>
           </div>
-          <p id="variant-text"></p>
-        </div>
+          <div class="variant-panel" id="variant-panel" hidden aria-label="改写候选">
+            <div class="variant-tabs" role="tablist" aria-label="改写版本">
+              <button class="variant-tab is-active" type="button" data-variant-tab="clean">
+                Clean
+              </button>
+              <button class="variant-tab" type="button" data-variant-tab="polish">
+                Polish
+              </button>
+              <button class="variant-tab" type="button" data-variant-tab="wechat">
+                Wechat
+              </button>
+              <button class="variant-tab" type="button" data-variant-tab="bullets">
+                Bullets
+              </button>
+            </div>
+            <div class="variant-actions">
+              <button id="copy-variant" type="button">复制选中版本</button>
+              <button id="paste-variant" type="button">粘贴选中版本</button>
+              <span id="variant-action-status"></span>
+            </div>
+            <p id="variant-text"></p>
+          </div>
+        </section>
+
+        <section class="runtime-error" id="runtime-error" hidden aria-label="运行错误">
+          <p class="label">错误详情</p>
+          <p id="runtime-error-text"></p>
+        </section>
       </section>
 
-      <section class="runtime-error" id="runtime-error" hidden aria-label="运行错误">
-        <p class="label">错误详情</p>
-        <p id="runtime-error-text"></p>
-      </section>
-
-      <section class="settings" id="settings-panel" hidden aria-label="设置">
+      <section class="settings mode-pane" id="settings-panel" data-mode-pane="settings" hidden aria-label="Settings">
         <div class="settings-tabs" role="tablist" aria-label="设置分组">
           <button
             class="settings-tab is-active"

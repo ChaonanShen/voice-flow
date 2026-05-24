@@ -62,6 +62,8 @@ const pauseToggle = document.querySelector("#pause-toggle");
 const settingsToggle = document.querySelector("#settings-toggle");
 const settingsPanel = document.querySelector("#settings-panel");
 const settingsMessage = document.querySelector("#settings-message");
+const modeTabs = document.querySelectorAll("[data-mode-tab]");
+const modePanes = document.querySelectorAll("[data-mode-pane]");
 const modelDirInput = document.querySelector("#model-dir");
 const hotkeyCtrl = document.querySelector("#hotkey-ctrl");
 const hotkeyAlt = document.querySelector("#hotkey-alt");
@@ -97,6 +99,7 @@ let activeVariant = "clean";
 let rewriteVariants = {};
 let rewriteKeySaved = false;
 let paused = false;
+let activeMode = "floating";
 
 function applyState(event) {
   const state = event?.state ?? "idle";
@@ -348,6 +351,21 @@ function switchSettingsTab(tab) {
   }
 }
 
+function switchMode(mode) {
+  activeMode = mode;
+  modeTabs.forEach((button) => {
+    const active = button.dataset.modeTab === mode;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-selected", String(active));
+  });
+  modePanes.forEach((pane) => {
+    pane.hidden = pane.dataset.modePane !== mode;
+  });
+  if (mode === "settings" && activeSettingsTab === "diagnostics") {
+    refreshDiagnosticsPanel();
+  }
+}
+
 async function refreshDiagnosticsPanel() {
   if (!invoke) {
     diagConfigPath.textContent = "预览模式";
@@ -437,7 +455,11 @@ async function boot() {
 }
 
 settingsToggle.addEventListener("click", () => {
-  settingsPanel.hidden = !settingsPanel.hidden;
+  switchMode(activeMode === "settings" ? "floating" : "settings");
+});
+
+modeTabs.forEach((button) => {
+  button.addEventListener("click", () => switchMode(button.dataset.modeTab));
 });
 
 pauseToggle.addEventListener("click", async () => {
