@@ -78,7 +78,23 @@ Expected:
 
 ## WAV-to-rewrite path
 
-After preparing an ASR model and a WAV fixture:
+The committed fixture is `docs/fixtures/demo-rewrite.wav`.
+
+It is a 16 kHz mono PCM WAV generated from the demo sentence with the
+Windows `Microsoft Huihui Desktop` zh-CN voice. The local Zipformer model
+currently transcribes it as:
+
+```text
+我要写个邮件就是跟老师说一下今天下午可能因为地铁晚点要晚到十分钟左右让他不要等我那个语气正是一点
+```
+
+Run ASR only:
+
+```powershell
+cargo run -p voice-cli -- transcribe docs/fixtures/demo-rewrite.wav
+```
+
+Run ASR plus clean rewrite:
 
 ```powershell
 cargo run -p voice-cli -- transcribe docs/fixtures/demo-rewrite.wav --rewrite clean --rewrite-provider deepseek
@@ -89,5 +105,3 @@ Expected:
 - ASR runs first.
 - CLI logs `state: rewriting`.
 - Final stdout is the rewritten text.
-
-The fixed WAV fixture is not committed yet; use this command shape when adding `docs/fixtures/demo-rewrite.wav`.
