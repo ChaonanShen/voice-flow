@@ -438,7 +438,7 @@ const store = {
 | PR | 标题 | 单一职责 |
 |---|---|---|
 | G4.5b.1 | `refactor(desktop): namespace desktop ui panes` | 只改 HTML id / class，把 floating、document、settings DOM 命名拆开；行为尽量不变 |
-| G4.5b.2 | `refactor(desktop): split mode render functions` | 拆出 `renderFloatingMode`、`renderDocumentMode`、`renderSettingsView`，事件先更新 store 再 render |
+| G4.5b.2 | `refactor(desktop): split mode render state` | 拆出 `renderFloatingMode`、`renderDocumentMode`、`renderSettingsView`，事件先更新 store 再 render |
 | G4.5b.3 | `refactor(desktop): isolate mode styles` | CSS 收口到 `.floating-mode` / `.document-mode` / `.settings-mode`，移除跨模式裸 selector |
 | G4.5b.4 | `fix(desktop): preserve settings return mode` | 设置面板从悬浮窗进入返回悬浮窗，从文稿模式进入返回文稿模式；窗口尺寸和 focusable 单独处理 |
 | G4.5b.5 | `docs(desktop): document ui mode separation` | 更新本文实际进展、模式边界和后续约束 |
@@ -461,6 +461,14 @@ const store = {
 - 从悬浮窗右键进入设置后返回悬浮窗；从文稿模式右键进入设置后返回文稿模式。
 - `node --check apps/desktop/ui/main.js` 通过。
 - `cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml` 通过，除非本次只改纯文档或纯 CSS/HTML 且无需后端编译。
+
+实际进展（2026-05-24）：
+
+- 已完成 G4.5b.1：HTML / CSS / JS selector 已按 `document-*`、`floating-*`、`settings-*` 命名拆开，文稿模式、悬浮窗模式、设置面板不再共享高风险 DOM id。
+- 已完成 G4.5b.2：`main.js` 已引入轻量 `store`，并拆出 `renderFloatingMode`、`renderDocumentMode`、`renderSettingsView`；Tauri event 先更新 store，再按 View 渲染。
+- 已完成 G4.5b.3：CSS 已按 `.document-mode`、`.floating-mode`、`.settings-mode` 收口，悬浮窗样式和文稿 / 设置样式边界更清楚。
+- 已完成 G4.5b.4：模式切换已拆为 `setMode`、`renderModeVisibility`、`applyWindowChrome`；设置面板进入 / 返回通过 `openSettings` / `closeSettings` 处理，保留进入设置前的内容模式。
+- 当前仍未完成：文稿模式真正编辑器、Result -> 文稿编辑区 output adapter、Last transcript -> Final text 差异视图。
 
 ### G5：快捷键、粘贴和 Windows 实机兼容
 
