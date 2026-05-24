@@ -43,56 +43,56 @@ const configDefaults = {
   rewrite: rewriteDefaults,
 };
 
-const dot = document.querySelector(".status-dot");
-const stateLabel = document.querySelector("#state-label");
-const lastTranscript = document.querySelector("#last-transcript");
-const rewriteChip = document.querySelector("#rewrite-chip");
-const resultMeta = document.querySelector("#result-meta");
-const fallbackReason = document.querySelector("#fallback-reason");
-const latencySummary = document.querySelector("#latency-summary");
-const variantPanel = document.querySelector("#variant-panel");
-const variantText = document.querySelector("#variant-text");
-const variantTabs = document.querySelectorAll("[data-variant-tab]");
-const copyVariant = document.querySelector("#copy-variant");
-const pasteVariant = document.querySelector("#paste-variant");
-const variantActionStatus = document.querySelector("#variant-action-status");
-const micButton = document.querySelector("#mic-button");
+const dot = document.querySelector("#document-status-dot");
+const stateLabel = document.querySelector("#document-state-label");
+const lastTranscript = document.querySelector("#document-last-text");
+const rewriteChip = document.querySelector("#document-rewrite-chip");
+const resultMeta = document.querySelector("#document-result-meta");
+const fallbackReason = document.querySelector("#document-fallback-reason");
+const latencySummary = document.querySelector("#document-latency-summary");
+const variantPanel = document.querySelector("#document-variant-panel");
+const variantText = document.querySelector("#document-variant-text");
+const variantTabs = document.querySelectorAll(".document-variant-tab");
+const copyVariant = document.querySelector("#document-copy-variant");
+const pasteVariant = document.querySelector("#document-paste-variant");
+const variantActionStatus = document.querySelector("#document-variant-action-status");
+const micButton = document.querySelector("#floating-mic-button");
 const floatingSettings = document.querySelector("#floating-settings");
 const settingsClose = document.querySelector("#settings-close");
-const runtimeError = document.querySelector("#runtime-error");
-const runtimeErrorText = document.querySelector("#runtime-error-text");
-const pauseToggle = document.querySelector("#pause-toggle");
-const settingsToggle = document.querySelector("#settings-toggle");
+const runtimeError = document.querySelector("#document-runtime-error");
+const runtimeErrorText = document.querySelector("#document-runtime-error-text");
+const pauseToggle = document.querySelector("#document-pause-toggle");
+const settingsToggle = document.querySelector("#document-settings-toggle");
 const settingsPanel = document.querySelector("#settings-panel");
 const settingsMessage = document.querySelector("#settings-message");
 const modeTabs = document.querySelectorAll("[data-mode-tab]");
 const modePanes = document.querySelectorAll("[data-mode-pane]");
-const modelDirInput = document.querySelector("#model-dir");
-const hotkeyCtrl = document.querySelector("#hotkey-ctrl");
-const hotkeyAlt = document.querySelector("#hotkey-alt");
-const hotkeyShift = document.querySelector("#hotkey-shift");
-const hotkeyLogo = document.querySelector("#hotkey-logo");
-const hotkeyKey = document.querySelector("#hotkey-key");
-const saveSettings = document.querySelector("#save-settings");
+const modelDirInput = document.querySelector("#settings-model-dir");
+const hotkeyCtrl = document.querySelector("#settings-hotkey-ctrl");
+const hotkeyAlt = document.querySelector("#settings-hotkey-alt");
+const hotkeyShift = document.querySelector("#settings-hotkey-shift");
+const hotkeyLogo = document.querySelector("#settings-hotkey-logo");
+const hotkeyKey = document.querySelector("#settings-hotkey-key");
+const saveSettings = document.querySelector("#settings-save");
 const settingsTabs = document.querySelectorAll("[data-settings-tab]");
 const settingsPanes = document.querySelectorAll("[data-settings-pane]");
-const refreshDiagnostics = document.querySelector("#refresh-diagnostics");
-const diagConfigPath = document.querySelector("#diag-config-path");
-const diagLogPath = document.querySelector("#diag-log-path");
-const diagModelDir = document.querySelector("#diag-model-dir");
-const diagRuntime = document.querySelector("#diag-runtime");
-const diagRewriteKey = document.querySelector("#diag-rewrite-key");
-const rewriteEnabled = document.querySelector("#rewrite-enabled");
-const rewriteEnabledLabel = document.querySelector("#rewrite-enabled-label");
-const rewriteProfile = document.querySelector("#rewrite-profile");
-const rewriteModel = document.querySelector("#rewrite-model");
-const rewriteTimeout = document.querySelector("#rewrite-timeout");
-const rewriteApiKey = document.querySelector("#rewrite-api-key");
-const clearRewriteKey = document.querySelector("#clear-rewrite-key");
-const rewriteKeyStatus = document.querySelector("#rewrite-key-status");
-const rewriteProviderSummary = document.querySelector("#rewrite-provider-summary");
-const rewriteProfileSummary = document.querySelector("#rewrite-profile-summary");
-const rewriteKeySummary = document.querySelector("#rewrite-key-summary");
+const refreshDiagnostics = document.querySelector("#settings-refresh-diagnostics");
+const diagConfigPath = document.querySelector("#settings-diag-config-path");
+const diagLogPath = document.querySelector("#settings-diag-log-path");
+const diagModelDir = document.querySelector("#settings-diag-model-dir");
+const diagRuntime = document.querySelector("#settings-diag-runtime");
+const diagRewriteKey = document.querySelector("#settings-diag-rewrite-key");
+const rewriteEnabled = document.querySelector("#settings-rewrite-enabled");
+const rewriteEnabledLabel = document.querySelector("#settings-rewrite-enabled-label");
+const rewriteProfile = document.querySelector("#settings-rewrite-profile");
+const rewriteModel = document.querySelector("#settings-rewrite-model");
+const rewriteTimeout = document.querySelector("#settings-rewrite-timeout");
+const rewriteApiKey = document.querySelector("#settings-rewrite-api-key");
+const clearRewriteKey = document.querySelector("#settings-clear-rewrite-key");
+const rewriteKeyStatus = document.querySelector("#settings-rewrite-key-status");
+const rewriteProviderSummary = document.querySelector("#settings-rewrite-provider-summary");
+const rewriteProfileSummary = document.querySelector("#settings-rewrite-profile-summary");
+const rewriteKeySummary = document.querySelector("#settings-rewrite-key-summary");
 
 const invoke = window.__TAURI__?.core?.invoke;
 const listen = window.__TAURI__?.event?.listen;
@@ -290,7 +290,7 @@ function validateHotkeyForm() {
 
 function currentRewriteProvider() {
   return (
-    document.querySelector('input[name="rewrite-provider"]:checked')?.value ??
+    document.querySelector('input[name="settings-rewrite-provider"]:checked')?.value ??
     rewriteDefaults.provider
   );
 }
@@ -326,7 +326,7 @@ function readRewriteConfig() {
 }
 
 function setRewriteProvider(provider) {
-  document.querySelectorAll('input[name="rewrite-provider"]').forEach((input) => {
+  document.querySelectorAll('input[name="settings-rewrite-provider"]').forEach((input) => {
     input.checked = input.value === provider;
   });
 }
@@ -700,7 +700,7 @@ async function writeSelectedVariant(command, pendingLabel, doneLabel) {
     variantActionStatus.textContent = String(error);
   }
 }
-document.querySelectorAll('input[name="rewrite-provider"]').forEach((input) => {
+document.querySelectorAll('input[name="settings-rewrite-provider"]').forEach((input) => {
   input.addEventListener("change", async () => {
     if (!rewriteModel.value.trim()) {
       rewriteModel.value = providerDefaults[currentRewriteProvider()]?.model ?? "";

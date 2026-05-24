@@ -35,79 +35,79 @@
         </button>
       </nav>
 
-      <section class="voice-pad mode-pane" data-mode-pane="voice-pad" hidden aria-label="文稿模式">
-        <section class="status-row" data-tauri-drag-region="deep">
-          <div class="status-dot" data-state="idle" aria-hidden="true"></div>
-          <div class="status-text">
+      <section id="document-pane" class="document-mode mode-pane" data-mode-pane="voice-pad" hidden aria-label="文稿模式">
+        <section class="document-status-row" data-tauri-drag-region="deep">
+          <div id="document-status-dot" class="document-status-dot" data-state="idle" aria-hidden="true"></div>
+          <div class="document-status-text">
             <p class="label">voice-flow</p>
-            <h1 id="state-label">待机</h1>
+            <h1 id="document-state-label">待机</h1>
           </div>
-          <button id="pause-toggle" class="icon-button" type="button" title="暂停监听">
+          <button id="document-pause-toggle" class="icon-button" type="button" title="暂停监听">
             <span aria-hidden="true">||</span>
           </button>
-          <button id="settings-toggle" class="icon-button" type="button" title="设置">
+          <button id="document-settings-toggle" class="icon-button" type="button" title="设置">
             <span aria-hidden="true">...</span>
           </button>
         </section>
 
-        <section class="transcript" aria-label="最近一次识别文本">
-          <div class="transcript-meta">
+        <section class="document-transcript" aria-label="最近一次识别文本">
+          <div class="document-transcript-meta">
             <p class="label">最近文本</p>
-            <span id="rewrite-chip">改写关闭</span>
+            <span id="document-rewrite-chip">改写关闭</span>
           </div>
-          <p id="last-transcript">尚无识别结果</p>
+          <p id="document-last-text">尚无识别结果</p>
 
-          <div class="result-meta" id="result-meta" hidden>
-            <span id="fallback-reason"></span>
-            <span id="latency-summary"></span>
+          <div class="document-result-meta" id="document-result-meta" hidden>
+            <span id="document-fallback-reason"></span>
+            <span id="document-latency-summary"></span>
           </div>
 
-          <div class="variant-panel" id="variant-panel" hidden aria-label="改写候选">
-            <div class="variant-tabs" role="tablist" aria-label="改写版本">
-              <button class="variant-tab is-active" type="button" data-variant-tab="clean">
+          <div class="document-variant-panel" id="document-variant-panel" hidden aria-label="改写候选">
+            <div class="document-variant-tabs" role="tablist" aria-label="改写版本">
+              <button class="document-variant-tab is-active" type="button" data-variant-tab="clean">
                 Clean
               </button>
-              <button class="variant-tab" type="button" data-variant-tab="polish">
+              <button class="document-variant-tab" type="button" data-variant-tab="polish">
                 Polish
               </button>
-              <button class="variant-tab" type="button" data-variant-tab="wechat">
+              <button class="document-variant-tab" type="button" data-variant-tab="wechat">
                 Wechat
               </button>
-              <button class="variant-tab" type="button" data-variant-tab="bullets">
+              <button class="document-variant-tab" type="button" data-variant-tab="bullets">
                 Bullets
               </button>
             </div>
-            <div class="variant-actions">
-              <button id="copy-variant" type="button">复制选中版本</button>
-              <button id="paste-variant" type="button">粘贴选中版本</button>
-              <span id="variant-action-status"></span>
+            <div class="document-variant-actions">
+              <button id="document-copy-variant" type="button">复制选中版本</button>
+              <button id="document-paste-variant" type="button">粘贴选中版本</button>
+              <span id="document-variant-action-status"></span>
             </div>
-            <p id="variant-text"></p>
+            <p id="document-variant-text"></p>
           </div>
         </section>
 
-        <section class="runtime-error" id="runtime-error" hidden aria-label="运行错误">
+        <section class="document-runtime-error" id="document-runtime-error" hidden aria-label="运行错误">
           <p class="label">错误详情</p>
-          <p id="runtime-error-text"></p>
+          <p id="document-runtime-error-text"></p>
         </section>
       </section>
 
-      <section class="mode-pane" data-mode-pane="floating" aria-label="悬浮窗模式">
+      <section id="floating-pane" class="floating-mode mode-pane" data-mode-pane="floating" aria-label="悬浮窗模式">
         <section class="floating-panel" aria-label="悬浮窗状态">
           <div class="floating-drag-handle" data-tauri-drag-region="deep" aria-hidden="true"></div>
           <button
-            id="mic-button"
-            class="mic-button"
+            id="floating-mic-button"
+            class="floating-mic-button"
             type="button"
             aria-label="麦克风"
             title="点击开始/结束；Alt+Space 按住说话"
           >
-            <span class="mic-icon" aria-hidden="true"></span>
+            <span class="floating-mic-icon" aria-hidden="true"></span>
           </button>
         </section>
       </section>
 
-      <section class="settings mode-pane" id="settings-panel" data-mode-pane="settings" hidden aria-label="设置">
+      <section class="settings-mode mode-pane" id="settings-panel" data-mode-pane="settings" hidden aria-label="设置">
         <div class="settings-header" data-tauri-drag-region="deep">
           <strong>设置</strong>
           <button id="settings-close" class="settings-close" type="button">返回</button>
@@ -146,16 +146,16 @@
         <div class="settings-pane" data-settings-pane="input">
           <label class="field">
             <span>模型目录</span>
-            <input id="model-dir" type="text" spellcheck="false" />
+            <input id="settings-model-dir" type="text" spellcheck="false" />
           </label>
           <div class="hotkey-grid" aria-label="快捷键设置">
-            <label><input id="hotkey-ctrl" type="checkbox" />Ctrl</label>
-            <label><input id="hotkey-alt" type="checkbox" />Alt</label>
-            <label><input id="hotkey-shift" type="checkbox" />Shift</label>
-            <label><input id="hotkey-logo" type="checkbox" />Win</label>
+            <label><input id="settings-hotkey-ctrl" type="checkbox" />Ctrl</label>
+            <label><input id="settings-hotkey-alt" type="checkbox" />Alt</label>
+            <label><input id="settings-hotkey-shift" type="checkbox" />Shift</label>
+            <label><input id="settings-hotkey-logo" type="checkbox" />Win</label>
             <label class="field hotkey-key">
               <span>键</span>
-              <input id="hotkey-key" type="text" />
+              <input id="settings-hotkey-key" type="text" />
             </label>
           </div>
         </div>
@@ -164,14 +164,14 @@
           <label class="switch-row">
             <span>
               <strong>AI 改写</strong>
-              <small id="rewrite-enabled-label">关闭</small>
+              <small id="settings-rewrite-enabled-label">关闭</small>
             </span>
-            <input id="rewrite-enabled" type="checkbox" role="switch" />
+            <input id="settings-rewrite-enabled" type="checkbox" role="switch" />
           </label>
 
           <label class="field">
             <span>默认档</span>
-            <select id="rewrite-profile">
+            <select id="settings-rewrite-profile">
               <option value="clean">Clean</option>
               <option value="polish">Polish</option>
               <option value="email">Email</option>
@@ -187,15 +187,15 @@
             <span>Provider</span>
             <div class="segmented" role="radiogroup" aria-label="Rewrite provider">
               <label>
-                <input type="radio" name="rewrite-provider" value="deepseek" />
+                <input type="radio" name="settings-rewrite-provider" value="deepseek" />
                 <span>DeepSeek</span>
               </label>
               <label>
-                <input type="radio" name="rewrite-provider" value="dashscope" />
+                <input type="radio" name="settings-rewrite-provider" value="dashscope" />
                 <span>DashScope</span>
               </label>
               <label>
-                <input type="radio" name="rewrite-provider" value="openai" />
+                <input type="radio" name="settings-rewrite-provider" value="openai" />
                 <span>OpenAI</span>
               </label>
             </div>
@@ -203,53 +203,53 @@
 
           <label class="field">
             <span>模型</span>
-            <input id="rewrite-model" type="text" spellcheck="false" />
+            <input id="settings-rewrite-model" type="text" spellcheck="false" />
           </label>
 
           <div class="rewrite-grid">
             <label class="field">
               <span>超时 ms</span>
-              <input id="rewrite-timeout" type="number" min="500" step="100" />
+              <input id="settings-rewrite-timeout" type="number" min="500" step="100" />
             </label>
             <label class="field">
               <span>API key</span>
-              <input id="rewrite-api-key" type="password" autocomplete="off" />
+              <input id="settings-rewrite-api-key" type="password" autocomplete="off" />
             </label>
           </div>
 
           <div class="key-actions">
-            <button id="clear-rewrite-key" type="button">清除 key</button>
-            <span id="rewrite-key-status">未保存</span>
+            <button id="settings-clear-rewrite-key" type="button">清除 key</button>
+            <span id="settings-rewrite-key-status">未保存</span>
           </div>
 
           <div class="rewrite-summary" aria-label="当前改写设置">
-            <span id="rewrite-provider-summary">deepseek</span>
-            <span id="rewrite-profile-summary">clean</span>
-            <span id="rewrite-key-summary">DEEPSEEK_API_KEY</span>
+            <span id="settings-rewrite-provider-summary">deepseek</span>
+            <span id="settings-rewrite-profile-summary">clean</span>
+            <span id="settings-rewrite-key-summary">DEEPSEEK_API_KEY</span>
           </div>
           <p class="pane-note">API key 会保存到系统凭据管理器，不写入 app.toml；留空保存只更新改写设置。</p>
         </div>
 
         <div class="settings-pane" data-settings-pane="diagnostics" hidden>
-          <div class="diagnostics-grid" id="diagnostics-grid">
+          <div class="diagnostics-grid" id="settings-diagnostics-grid">
             <span>配置</span>
-            <strong id="diag-config-path">-</strong>
+            <strong id="settings-diag-config-path">-</strong>
             <span>日志</span>
-            <strong id="diag-log-path">-</strong>
+            <strong id="settings-diag-log-path">-</strong>
             <span>模型目录</span>
-            <strong id="diag-model-dir">-</strong>
+            <strong id="settings-diag-model-dir">-</strong>
             <span>Runtime</span>
-            <strong id="diag-runtime">-</strong>
+            <strong id="settings-diag-runtime">-</strong>
             <span>Rewrite key</span>
-            <strong id="diag-rewrite-key">-</strong>
+            <strong id="settings-diag-rewrite-key">-</strong>
           </div>
-          <button id="refresh-diagnostics" class="secondary-action" type="button">
+          <button id="settings-refresh-diagnostics" class="secondary-action" type="button">
             刷新诊断
           </button>
         </div>
 
         <div class="settings-actions">
-          <button id="save-settings" type="button">保存</button>
+          <button id="settings-save" type="button">保存</button>
           <span id="settings-message" role="status"></span>
         </div>
       </section>
