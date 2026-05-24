@@ -35,6 +35,24 @@ apps\desktop\src-tauri\target\release\bundle\
 
 具体子目录取决于 Tauri 当前启用的 bundle target。
 
+## 当前验证结果（2026-05-24）
+
+已在当前开发机执行：
+
+```powershell
+$env:SHERPA_ONNX_ARCHIVE_DIR = "$env:USERPROFILE\.cache\voice-flow\sherpa-onnx"
+& C:\Users\16867\.cargo\bin\cargo-tauri.exe build
+```
+
+结果：
+
+- `release exe` 构建成功：
+  - `apps\desktop\src-tauri\target\release\voice-flow-desktop.exe`
+- `MSI` 打包成功：
+  - `apps\desktop\src-tauri\target\release\bundle\msi\voice-flow_0.1.0_x64_en-US.msi`
+- `NSIS` target 未完成：
+  - 原因不是项目代码报错，而是下载 NSIS 二进制时遇到 `io: Connection refused`
+
 ## 首次安装后 smoke checklist
 
 1. 能正常启动应用。

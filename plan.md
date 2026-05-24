@@ -284,9 +284,10 @@ voice-flow/
 **当前状态（2026-05-24）**：
 
 - Step 8 的云端 ASR crate、CLI flag 和 core engine selection 已完成。
-- 桌面 runtime 仍直接使用本地 `StreamingZipformer`，尚未接入 `voice-core::engine::EngineSelection`。
-- 桌面设置面板还没有 local / cloud ASR engine 切换，也没有云端 ASR keyring 表单。
-- rewrite provider keyring 已完成，但它属于 AI 改写 provider key，不等同于云端 ASR key。
+- 桌面 runtime 已接入 `voice-core::engine::EngineSelection`，支持 local / cloud ASR engine selection。
+- 桌面设置面板已支持 local / cloud ASR engine 切换，并可保存 / 清除 DashScope cloud ASR key。
+- 桌面 diagnostics 已显示当前 ASR engine 和 cloud key 状态。
+- **仍待人工验收**：Windows 上配置真实 `DASHSCOPE_API_KEY` 跑一次 cloud ASR 实机链路；记录外部输入框兼容结果。
 
 ---
 
@@ -332,6 +333,19 @@ cargo run -p voice-cli -- transcribe docs/fixtures/demo-rewrite.wav --rewrite cl
 | 11.1 | `docs: complete README usage guide` | 完整使用文档 |
 | 11.2 | `docs: add demo script` | `docs/demo-script.md` 演示脚本 |
 | 11.3 | `docs: link demo video in README` | B 站视频链接 |
+
+**当前状态（2026-05-24）**：
+
+- README 已同步当前 desktop 双模式、ASR engine selection、rewrite、打包与文档入口。
+- 已新增 [`docs/demo-script.md`](./docs/demo-script.md) 作为总 demo 脚本，覆盖悬浮窗模式、文稿模式、local / cloud ASR 和 rewrite。
+- 已新增 [`docs/desktop-packaging.md`](./docs/desktop-packaging.md) 作为桌面端本地打包与 smoke 指南。
+- 已在当前开发机自动验证：
+  - `cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml`
+  - `cargo test -p voice-core`
+  - `cargo test -p voice-rewrite`
+  - `cargo tauri build`
+- `cargo tauri build` 已成功产出 `release exe` 和 `MSI`；`NSIS` target 因下载器网络拒绝未完成，不属于项目代码错误。
+- **仍待人工补充**：B 站 demo 视频链接、Windows 实机验收记录。
 
 ---
 

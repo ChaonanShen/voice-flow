@@ -73,6 +73,8 @@ cargo run -p voice-cli -- transcribe out.wav
 - ASR engine 选择：`local` / `cloud`
 - rewrite provider keyring
 - cloud ASR keyring
+- output mode 持久化
+- 模型目录缺失提示
 - trace overlay
 - diagnostics 和打开日志目录
 
@@ -126,6 +128,16 @@ cargo test -p voice-rewrite --test live_deepseek_examples -- --ignored --nocaptu
 - Windows 手测与 QA：[`windows_testing.md`](./windows_testing.md)
 - Desktop GUI 路线：[`desktop_gui_plan.md`](./desktop_gui_plan.md)
 - Desktop 打包：[`docs/desktop-packaging.md`](./docs/desktop-packaging.md)
+- 总 demo script：[`docs/demo-script.md`](./docs/demo-script.md)
+
+当前已自动验证：
+
+- `cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml`
+- `cargo test -p voice-core`
+- `cargo test -p voice-rewrite`
+- `cargo tauri build`
+
+其中 `cargo tauri build` 已成功产出 `release exe` 和 `MSI`；`NSIS` target 因下载器网络拒绝未完成，详见 [`docs/desktop-packaging.md`](./docs/desktop-packaging.md)。
 
 ## 七、模型下载
 
@@ -140,7 +152,7 @@ EXTRACT=0 bash scripts/download-models.sh
 
 ## 八、Demo 视频
 
-待 Step 9 完成后补充 B 站链接。
+当前建议按 [`docs/demo-script.md`](./docs/demo-script.md) 的顺序录制演示。B 站链接待补。
 
 ## 九、许可证
 
