@@ -9,6 +9,7 @@ pub enum RealtimeState {
     Idle,
     Recording,
     Transcribing,
+    Rewriting,
     Completed,
 }
 
@@ -19,6 +20,7 @@ impl RealtimeState {
             Self::Idle => "idle",
             Self::Recording => "recording",
             Self::Transcribing => "transcribing",
+            Self::Rewriting => "rewriting",
             Self::Completed => "completed",
         }
     }
@@ -55,6 +57,7 @@ mod tests {
         assert_eq!(RealtimeState::Idle.label(), "idle");
         assert_eq!(RealtimeState::Recording.label(), "recording");
         assert_eq!(RealtimeState::Transcribing.label(), "transcribing");
+        assert_eq!(RealtimeState::Rewriting.label(), "rewriting");
         assert_eq!(RealtimeState::Completed.label(), "completed");
     }
 

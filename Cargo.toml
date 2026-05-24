@@ -5,6 +5,7 @@ members = [
     "crates/voice-asr-local",
     "crates/voice-asr-cloud",
     "crates/voice-cli",
+    "crates/voice-rewrite",
 ]
 
 [workspace.package]

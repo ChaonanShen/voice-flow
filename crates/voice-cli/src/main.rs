@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
@@ -7,16 +8,24 @@ use voice_asr_cloud::dashscope::DASHSCOPE_API_KEY_ENV;
 use voice_asr_cloud::{CloudEngineConfig, ParaformerCloudEngine};
 use voice_asr_local::{StreamingZipformer, MODEL_DIR_ENV};
 use voice_core::asr::AsrEngine;
-use voice_core::engine::{resolve_engine_selection, EngineKind, EngineSelection};
 use voice_core::capture::{AudioCapture, AudioFormat};
 use voice_core::clipboard::{ClipboardWriter, SystemClipboard};
 use voice_core::cpal_backend::CpalCapture;
+use voice_core::engine::{resolve_engine_selection, EngineKind, EngineSelection};
 use voice_core::file_backend::FileCapture;
 use voice_core::hotkey::{PushToTalkHotkey, PUSH_TO_TALK_HOTKEY_LABEL};
 use voice_core::paste::{PasteSimulator, SystemPaste};
 use voice_core::push_to_talk::{PushToTalkRecorder, PushToTalkRecorderEvent};
 use voice_core::state::{RealtimeState, RealtimeStateEvent};
 use voice_core::wav::{read_pcm16_wav, write_pcm16_wav};
+use voice_rewrite::llm::openai_compat::OpenAiCompatClient;
+use voice_rewrite::{
+    IdentityRewritePipeline, LlmRewritePipeline, Profile, RewriteContext, RewritePipeline,
+};
+
+const DEEPSEEK_API_KEY_ENV: &str = "DEEPSEEK_API_KEY";
+const DEFAULT_REWRITE_MODEL: &str = "deepseek-chat";
+const DEFAULT_REWRITE_TIMEOUT: Duration = Duration::from_secs(4);
 
 #[derive(Parser)]
 #[command(name = "voice-cli", version, about = "voice-flow voice input CLI")]
@@ -77,6 +86,27 @@ enum Command {
         /// DashScope API key（仅 `--engine cloud` 使用）。未提供时读取 DASHSCOPE_API_KEY。
         #[arg(long)]
         api_key: Option<String>,
+        /// 可选 AI 改写档。Day 1 支持 `clean`；不提供则只输出 ASR 原文。
+        #[arg(long, value_parser = parse_profile)]
+        rewrite: Option<Profile>,
+        /// AI 改写模型名。默认 deepseek-chat。
+        #[arg(long, default_value = DEFAULT_REWRITE_MODEL)]
+        rewrite_model: String,
+        /// DeepSeek API key。未提供时读取 DEEPSEEK_API_KEY / .env。
+        #[arg(long)]
+        rewrite_api_key: Option<String>,
+    },
+    /// 将 stdin 文本改写后输出。Day 1 支持 clean profile + DeepSeek。
+    Rewrite {
+        /// 改写档。Day 1 支持 `clean` 和 `off`。
+        #[arg(long, default_value = "clean", value_parser = parse_profile)]
+        profile: Profile,
+        /// AI 改写模型名。默认 deepseek-chat。
+        #[arg(long, default_value = DEFAULT_REWRITE_MODEL)]
+        model: String,
+        /// DeepSeek API key。未提供时读取 DEEPSEEK_API_KEY / .env。
+        #[arg(long)]
+        api_key: Option<String>,
     },
     /// 注册默认全局快捷键并打印按下/松开事件。
     ListenHotkey,
@@ -126,7 +156,23 @@ fn main() -> Result<()> {
             engine,
             model_dir,
             api_key,
-        } => transcribe(input, engine.into(), model_dir, api_key),
+            rewrite,
+            rewrite_model,
+            rewrite_api_key,
+        } => transcribe(
+            input,
+            engine.into(),
+            model_dir,
+            api_key,
+            rewrite,
+            rewrite_model,
+            rewrite_api_key,
+        ),
+        Command::Rewrite {
+            profile,
+            model,
+            api_key,
+        } => rewrite_stdin(profile, model, api_key),
         Command::ListenHotkey => listen_hotkey(),
         Command::PushToTalkRecord {
             output,
@@ -216,6 +262,9 @@ fn transcribe(
     engine_kind: EngineKind,
     model_dir: Option<PathBuf>,
     api_key: Option<String>,
+    rewrite: Option<Profile>,
+    rewrite_model: String,
+    rewrite_api_key: Option<String>,
 ) -> Result<()> {
     let state = RealtimeStateEvent::new(RealtimeState::Transcribing);
     eprintln!("state: {}", state.state.label());
@@ -232,13 +281,90 @@ fn transcribe(
 
     let selection = resolve_cli_selection(engine_kind, model_dir, api_key)?;
     let engine = build_engine(&selection)?;
-    let text = engine
+    let raw_text = engine
         .transcribe(&samples, format)
         .context("failed to transcribe WAV")?;
+    let text = match rewrite {
+        Some(profile) => {
+            eprintln!("state: {}", RealtimeState::Rewriting.label());
+            run_rewrite_pipeline(&raw_text, profile, rewrite_model, rewrite_api_key)?
+        }
+        None => raw_text,
+    };
     let completed = RealtimeStateEvent::new(RealtimeState::Completed).with_transcript(&text);
     eprintln!("state: {}", completed.state.label());
     println!("{text}");
     Ok(())
+}
+
+fn rewrite_stdin(profile: Profile, model: String, api_key: Option<String>) -> Result<()> {
+    let mut input = String::new();
+    std::io::Read::read_to_string(&mut std::io::stdin(), &mut input)
+        .context("failed to read stdin")?;
+    let output = run_rewrite_pipeline(input.trim(), profile, model, api_key)?;
+    println!("{output}");
+    Ok(())
+}
+
+fn run_rewrite_pipeline(
+    text: &str,
+    profile: Profile,
+    model: String,
+    api_key: Option<String>,
+) -> Result<String> {
+    if !profile.should_call_llm() {
+        let pipeline = IdentityRewritePipeline;
+        let result = block_on_rewrite(pipeline.process(text, RewriteContext::off()))?;
+        return Ok(result.main);
+    }
+
+    let Some(key) = resolve_rewrite_api_key(api_key) else {
+        eprintln!("rewrite fallback: missing {DEEPSEEK_API_KEY_ENV}");
+        let pipeline = IdentityRewritePipeline;
+        let result = block_on_rewrite(pipeline.process(text, RewriteContext::off()))?;
+        return Ok(result.main);
+    };
+
+    let client =
+        OpenAiCompatClient::deepseek(key).context("failed to initialize DeepSeek client")?;
+    let pipeline = LlmRewritePipeline::new(client);
+    let ctx = RewriteContext {
+        default_profile: profile,
+        user_dictionary: std::sync::Arc::new(voice_rewrite::UserDictionary::default()),
+        model,
+        timeout: DEFAULT_REWRITE_TIMEOUT,
+    };
+    let result = block_on_rewrite(pipeline.process(text, ctx))?;
+    if result.trace.fallback {
+        if let Some(error) = &result.trace.error {
+            eprintln!("rewrite fallback: {error}");
+        }
+    }
+    Ok(result.main)
+}
+
+fn block_on_rewrite<F>(future: F) -> Result<voice_rewrite::RewriteResult>
+where
+    F: std::future::Future<
+        Output = Result<voice_rewrite::RewriteResult, voice_rewrite::RewriteError>,
+    >,
+{
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .context("failed to build rewrite runtime")?;
+    runtime.block_on(future).context("failed to rewrite text")
+}
+
+fn resolve_rewrite_api_key(api_key: Option<String>) -> Option<String> {
+    let _ = dotenvy::dotenv();
+    api_key
+        .or_else(|| std::env::var(DEEPSEEK_API_KEY_ENV).ok())
+        .filter(|key| !key.trim().is_empty())
+}
+
+fn parse_profile(value: &str) -> Result<Profile, String> {
+    Profile::from_str(value).map_err(|e| e.to_string())
 }
 
 /// Resolve CLI flags + env vars into a [`EngineSelection`].
@@ -271,9 +397,10 @@ fn build_engine(selection: &EngineSelection) -> Result<Box<dyn AsrEngine>> {
     match selection {
         EngineSelection::Local(params) => {
             eprintln!("local model dir: {}", params.model_dir.display());
-            let engine = StreamingZipformer::from_model_dir(&params.model_dir).with_context(|| {
-                format!("failed to load model from {}", params.model_dir.display())
-            })?;
+            let engine =
+                StreamingZipformer::from_model_dir(&params.model_dir).with_context(|| {
+                    format!("failed to load model from {}", params.model_dir.display())
+                })?;
             Ok(Box::new(engine))
         }
         EngineSelection::Cloud(params) => {
