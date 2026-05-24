@@ -11,6 +11,8 @@ pub enum RewriteError {
     InvalidProfile(#[from] ProfileParseError),
     #[error("llm error: {0}")]
     Llm(#[from] LlmError),
+    #[error("missing default model for rewrite provider `{0}`")]
+    MissingModel(String),
     #[error("rewrite timed out after {0:?}")]
     Timeout(Duration),
     #[error("invalid llm output: {0}")]

@@ -18,14 +18,7 @@ use voice_core::paste::{PasteSimulator, SystemPaste};
 use voice_core::push_to_talk::{PushToTalkRecorder, PushToTalkRecorderEvent};
 use voice_core::state::{RealtimeState, RealtimeStateEvent};
 use voice_core::wav::{read_pcm16_wav, write_pcm16_wav};
-use voice_rewrite::llm::openai_compat::OpenAiCompatClient;
-use voice_rewrite::{
-    IdentityRewritePipeline, LlmRewritePipeline, Profile, RewriteContext, RewritePipeline,
-};
-
-const DEEPSEEK_API_KEY_ENV: &str = "DEEPSEEK_API_KEY";
-const DEFAULT_REWRITE_MODEL: &str = "deepseek-chat";
-const DEFAULT_REWRITE_TIMEOUT: Duration = Duration::from_secs(4);
+use voice_rewrite::{Profile, RewriteSettings, DEFAULT_REWRITE_MODEL, DEFAULT_REWRITE_TIMEOUT};
 
 #[derive(Parser)]
 #[command(name = "voice-cli", version, about = "voice-flow voice input CLI")]
@@ -312,29 +305,23 @@ fn run_rewrite_pipeline(
     model: String,
     api_key: Option<String>,
 ) -> Result<String> {
-    if !profile.should_call_llm() {
-        let pipeline = IdentityRewritePipeline;
-        let result = block_on_rewrite(pipeline.process(text, RewriteContext::off()))?;
-        return Ok(result.main);
+    let mut settings = RewriteSettings {
+        enabled: profile.should_call_llm(),
+        default_profile: profile,
+        model: Some(model),
+        api_key,
+        timeout: DEFAULT_REWRITE_TIMEOUT,
+        ..RewriteSettings::default()
+    };
+    if !settings.enabled {
+        settings = RewriteSettings::disabled();
     }
 
-    let Some(key) = resolve_rewrite_api_key(api_key) else {
-        eprintln!("rewrite fallback: missing {DEEPSEEK_API_KEY_ENV}");
-        let pipeline = IdentityRewritePipeline;
-        let result = block_on_rewrite(pipeline.process(text, RewriteContext::off()))?;
-        return Ok(result.main);
-    };
+    let engine = settings
+        .build_engine()
+        .context("failed to initialize rewrite engine")?;
 
-    let client =
-        OpenAiCompatClient::deepseek(key).context("failed to initialize DeepSeek client")?;
-    let pipeline = LlmRewritePipeline::new(client);
-    let ctx = RewriteContext {
-        default_profile: profile,
-        user_dictionary: std::sync::Arc::new(voice_rewrite::UserDictionary::default()),
-        model,
-        timeout: DEFAULT_REWRITE_TIMEOUT,
-    };
-    let result = block_on_rewrite(pipeline.process(text, ctx))?;
+    let result = block_on_rewrite(engine.process(text))?;
     if result.trace.fallback {
         if let Some(error) = &result.trace.error {
             eprintln!("rewrite fallback: {error}");
@@ -354,13 +341,6 @@ where
         .build()
         .context("failed to build rewrite runtime")?;
     runtime.block_on(future).context("failed to rewrite text")
-}
-
-fn resolve_rewrite_api_key(api_key: Option<String>) -> Option<String> {
-    let _ = dotenvy::dotenv();
-    api_key
-        .or_else(|| std::env::var(DEEPSEEK_API_KEY_ENV).ok())
-        .filter(|key| !key.trim().is_empty())
 }
 
 fn parse_profile(value: &str) -> Result<Profile, String> {
