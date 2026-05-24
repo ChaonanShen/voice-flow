@@ -181,6 +181,18 @@ fn delete_rewrite_key(
 }
 
 #[tauri::command]
+fn copy_text(text: String) -> Result<(), String> {
+    if text.trim().is_empty() {
+        return Err("copy text cannot be empty".to_string());
+    }
+
+    let mut clipboard = SystemClipboard::new();
+    clipboard
+        .write_text(&text)
+        .map_err(|e| format!("failed to copy text: {e}"))
+}
+
+#[tauri::command]
 fn start_runtime(app: AppHandle, state: State<'_, DesktopState>) -> Result<(), String> {
     let runtime = state.runtime.clone();
     {
@@ -220,6 +232,7 @@ fn main() {
             get_rewrite_key_status,
             save_rewrite_key,
             delete_rewrite_key,
+            copy_text,
             start_runtime
         ])
         .setup(|app| {

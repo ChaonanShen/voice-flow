@@ -50,6 +50,8 @@ const rewriteChip = document.querySelector("#rewrite-chip");
 const variantPanel = document.querySelector("#variant-panel");
 const variantText = document.querySelector("#variant-text");
 const variantTabs = document.querySelectorAll("[data-variant-tab]");
+const copyVariant = document.querySelector("#copy-variant");
+const variantActionStatus = document.querySelector("#variant-action-status");
 const runtimeError = document.querySelector("#runtime-error");
 const runtimeErrorText = document.querySelector("#runtime-error-text");
 const settingsToggle = document.querySelector("#settings-toggle");
@@ -116,6 +118,8 @@ function applyRewriteResult(result) {
     clean: result?.text ?? "",
     ...(result?.variants ?? {}),
   };
+  activeVariant = rewriteVariants[activeVariant] ? activeVariant : "clean";
+  variantActionStatus.textContent = "";
   if (rewriteVariants.clean) {
     lastTranscript.textContent = rewriteVariants.clean;
   }
@@ -287,8 +291,11 @@ function updateVariantPanel() {
     rewriteProfile.value === "multi" &&
     Object.keys(rewriteVariants).length > 1;
   variantPanel.hidden = !show;
+  copyVariant.disabled = !show;
   if (show) {
     switchVariantTab(activeVariant);
+  } else {
+    variantActionStatus.textContent = "";
   }
 }
 
@@ -327,6 +334,25 @@ rewriteEnabled.addEventListener("change", updateRewriteSummary);
 rewriteProfile.addEventListener("change", updateRewriteSummary);
 variantTabs.forEach((button) => {
   button.addEventListener("click", () => switchVariantTab(button.dataset.variantTab));
+});
+copyVariant.addEventListener("click", async () => {
+  const text = rewriteVariants[activeVariant] ?? "";
+  if (!text.trim()) {
+    variantActionStatus.textContent = "当前版本为空";
+    return;
+  }
+
+  variantActionStatus.textContent = "复制中...";
+  try {
+    if (!invoke) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      await invoke("copy_text", { text });
+    }
+    variantActionStatus.textContent = "已复制";
+  } catch (error) {
+    variantActionStatus.textContent = String(error);
+  }
 });
 document.querySelectorAll('input[name="rewrite-provider"]').forEach((input) => {
   input.addEventListener("change", async () => {
