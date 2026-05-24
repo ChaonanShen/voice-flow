@@ -17,12 +17,15 @@ use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Emitter, Manager, State, WindowEvent};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+use voice_asr_cloud::dashscope::DASHSCOPE_API_KEY_ENV;
+use voice_asr_cloud::{CloudEngineConfig, ParaformerCloudEngine};
 use voice_asr_local::{StreamingZipformer, DEFAULT_STREAMING_ZIPFORMER_DIR, MODEL_DIR_ENV};
 use voice_core::asr::AsrEngine;
 use voice_core::capture::AudioFormat;
 use voice_core::clipboard::{ClipboardWriter, SystemClipboard};
-use voice_core::config::{AppConfig, HotkeyConfig, RewriteConfig};
+use voice_core::config::{AppConfig, AsrConfig, HotkeyConfig, RewriteConfig};
 use voice_core::cpal_backend::CpalCapture;
+use voice_core::engine::{resolve_engine_selection, EngineKind, EngineSelection};
 use voice_core::hotkey::PushToTalkEvent;
 use voice_core::paste::{PasteSimulator, SystemPaste};
 use voice_core::push_to_talk::{PushToTalkRecorder, PushToTalkRecorderEvent};
@@ -33,6 +36,7 @@ use voice_rewrite::{Profile, RewriteError, RewriteProvider, RewriteResult, Rewri
 const SAMPLE_RATE: u32 = 16_000;
 const CHANNELS: u16 = 1;
 const REWRITE_KEYRING_SERVICE: &str = "voice-flow";
+const ASR_KEYRING_SERVICE: &str = "voice-flow-asr";
 const TRAY_MENU_OPEN: &str = "voice-flow-open";
 const TRAY_MENU_TOGGLE_PAUSE: &str = "voice-flow-toggle-pause";
 const TRAY_MENU_QUIT: &str = "voice-flow-quit";
@@ -139,6 +143,18 @@ struct RewriteKeyStatus {
 }
 
 #[derive(Clone, Debug, Serialize)]
+struct AsrKeyStatus {
+    engine: EngineKind,
+    saved: bool,
+    source: &'static str,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct AsrKeyRequest {
+    api_key: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
 struct DiagnosticsEvent {
     config_path: String,
     log_path: String,
@@ -148,6 +164,8 @@ struct DiagnosticsEvent {
     restart_requested: bool,
     paused: bool,
     output_mode: DesktopOutputMode,
+    asr_engine: EngineKind,
+    asr_key_saved: bool,
     rewrite_enabled: bool,
     rewrite_provider: RewriteProvider,
     rewrite_key_saved: bool,
@@ -209,6 +227,61 @@ fn save_rewrite_config(
 #[tauri::command]
 fn get_rewrite_key_status(request: RewriteKeyProviderRequest) -> Result<RewriteKeyStatus, String> {
     rewrite_key_status(request.provider).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_asr_key_status(state: State<'_, DesktopState>) -> Result<AsrKeyStatus, String> {
+    let engine = state
+        .runtime
+        .lock()
+        .expect("runtime mutex poisoned")
+        .config
+        .asr
+        .engine;
+    asr_key_status(engine).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn save_asr_key(
+    request: AsrKeyRequest,
+    state: State<'_, DesktopState>,
+) -> Result<AsrKeyStatus, String> {
+    let key = request.api_key.trim();
+    if key.is_empty() {
+        return Err("API key cannot be empty".to_string());
+    }
+
+    let entry = asr_key_entry()
+        .map_err(|e| format!("failed to open ASR API key store: {e}"))?;
+    entry
+        .set_password(key)
+        .map_err(|e| format!("failed to save ASR API key: {e}"))?;
+
+    state
+        .runtime
+        .lock()
+        .expect("runtime mutex poisoned")
+        .restart_requested = true;
+
+    asr_key_status(EngineKind::Cloud).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn delete_asr_key(state: State<'_, DesktopState>) -> Result<AsrKeyStatus, String> {
+    let entry = asr_key_entry()
+        .map_err(|e| format!("failed to open ASR API key store: {e}"))?;
+    match entry.delete_credential() {
+        Ok(()) | Err(KeyringError::NoEntry) => {}
+        Err(err) => return Err(format!("failed to clear ASR API key: {err}")),
+    }
+
+    state
+        .runtime
+        .lock()
+        .expect("runtime mutex poisoned")
+        .restart_requested = true;
+
+    asr_key_status(EngineKind::Cloud).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -389,6 +462,9 @@ fn main() {
             get_rewrite_config,
             save_config,
             save_rewrite_config,
+            get_asr_key_status,
+            save_asr_key,
+            delete_asr_key,
             get_rewrite_key_status,
             save_rewrite_key,
             delete_rewrite_key,
@@ -492,10 +568,7 @@ fn open_main_window(app: &AppHandle) {
 }
 
 fn run_runtime_session(app: &AppHandle, runtime: &RuntimeHandle, config: AppConfig) -> Result<()> {
-    let model_dir = resolve_model_dir(config.model_dir.as_deref())?;
-    append_log(format!("loading model from {}", model_dir.display()));
-    let engine = StreamingZipformer::from_model_dir(&model_dir)
-        .with_context(|| format!("failed to load model from {}", model_dir.display()))?;
+    let engine = build_desktop_engine(&config)?;
     let hotkey = DesktopHotkey::register(app, config.hotkey.clone())
         .with_context(|| format!("failed to register hotkey {}", config.hotkey.to_label()))?;
     append_log(format!("registered hotkey {}", config.hotkey.to_label()));
@@ -734,6 +807,7 @@ fn diagnostics_event(state: &State<'_, DesktopState>) -> Result<DiagnosticsEvent
     let rewrite_key_saved = read_rewrite_key(runtime.config.rewrite.provider)
         .map(|key| key.is_some())
         .unwrap_or(false);
+    let asr_key_saved = read_asr_key().map(|key| key.is_some()).unwrap_or(false);
 
     Ok(DiagnosticsEvent {
         config_path: config_path().display().to_string(),
@@ -744,6 +818,8 @@ fn diagnostics_event(state: &State<'_, DesktopState>) -> Result<DiagnosticsEvent
         restart_requested: runtime.restart_requested,
         paused: runtime.paused,
         output_mode: runtime.output_mode,
+        asr_engine: runtime.config.asr.engine,
+        asr_key_saved,
         rewrite_enabled: runtime.config.rewrite.enabled,
         rewrite_provider: runtime.config.rewrite.provider,
         rewrite_key_saved,
@@ -813,6 +889,79 @@ fn read_rewrite_key(provider: RewriteProvider) -> Result<Option<String>> {
 
 fn rewrite_key_entry(provider: RewriteProvider) -> Result<Entry> {
     Entry::new(REWRITE_KEYRING_SERVICE, provider.label()).map_err(|e| anyhow::anyhow!(e))
+}
+
+fn asr_key_status(engine: EngineKind) -> Result<AsrKeyStatus> {
+    Ok(AsrKeyStatus {
+        engine,
+        saved: if engine == EngineKind::Cloud {
+            read_asr_key()?.is_some()
+        } else {
+            false
+        },
+        source: "keyring",
+    })
+}
+
+fn read_asr_key() -> Result<Option<String>> {
+    match asr_key_entry()?.get_password() {
+        Ok(key) => Ok(Some(key)),
+        Err(KeyringError::NoEntry) => Ok(None),
+        Err(err) => Err(anyhow::anyhow!(err)),
+    }
+}
+
+fn asr_key_entry() -> Result<Entry> {
+    Entry::new(ASR_KEYRING_SERVICE, "dashscope").map_err(|e| anyhow::anyhow!(e))
+}
+
+fn build_desktop_engine(config: &AppConfig) -> Result<Box<dyn AsrEngine>> {
+    let selection = resolve_desktop_selection(&config.asr, config.model_dir.as_deref())?;
+    build_engine(&selection)
+}
+
+fn resolve_desktop_selection(asr: &AsrConfig, model_dir: Option<&str>) -> Result<EngineSelection> {
+    let model_dir = model_dir
+        .map(PathBuf::from)
+        .filter(|path| !path.as_os_str().is_empty())
+        .or_else(|| std::env::var_os(MODEL_DIR_ENV).map(PathBuf::from))
+        .or_else(default_model_dir);
+    let api_key = if asr.engine == EngineKind::Cloud {
+        read_asr_key()?
+            .or_else(|| std::env::var(DASHSCOPE_API_KEY_ENV).ok())
+            .filter(|key| !key.trim().is_empty())
+    } else {
+        None
+    };
+
+    resolve_engine_selection(asr.engine, model_dir, api_key).map_err(|e| match e {
+        voice_core::engine::EngineSelectionError::MissingModelDir => {
+            anyhow::anyhow!("missing model directory for local ASR")
+        }
+        voice_core::engine::EngineSelectionError::MissingApiKey => {
+            anyhow::anyhow!("missing DashScope API key for cloud ASR")
+        }
+        other => anyhow::Error::from(other),
+    })
+}
+
+fn build_engine(selection: &EngineSelection) -> Result<Box<dyn AsrEngine>> {
+    match selection {
+        EngineSelection::Local(params) => {
+            append_log(format!("loading local ASR model from {}", params.model_dir.display()));
+            let engine = StreamingZipformer::from_model_dir(&params.model_dir).with_context(|| {
+                format!("failed to load model from {}", params.model_dir.display())
+            })?;
+            Ok(Box::new(engine))
+        }
+        EngineSelection::Cloud(params) => {
+            append_log("initializing cloud ASR engine (dashscope)");
+            let config = CloudEngineConfig::dashscope(params.api_key.clone());
+            let engine = ParaformerCloudEngine::from_config(&config)
+                .context("failed to initialize cloud engine")?;
+            Ok(Box::new(engine))
+        }
+    }
 }
 
 fn run_rewrite<F>(future: F) -> Result<RewriteResult>
@@ -990,29 +1139,6 @@ fn with_default_model_dir(mut config: AppConfig) -> AppConfig {
         }
     }
     config
-}
-
-fn resolve_model_dir(configured: Option<&str>) -> Result<PathBuf> {
-    if let Some(path) = configured.filter(|p| !p.trim().is_empty()) {
-        let path = PathBuf::from(path);
-        if path.is_dir() {
-            return Ok(path);
-        }
-    }
-
-    if let Some(path) = std::env::var_os(MODEL_DIR_ENV).map(PathBuf::from) {
-        if path.is_dir() {
-            return Ok(path);
-        }
-    }
-
-    if let Some(path) = default_model_dir() {
-        if path.is_dir() {
-            return Ok(path);
-        }
-    }
-
-    anyhow::bail!("model directory is not configured or does not exist")
 }
 
 fn default_model_dir() -> Option<PathBuf> {

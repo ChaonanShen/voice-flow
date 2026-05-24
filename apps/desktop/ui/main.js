@@ -33,6 +33,9 @@ const providerDefaults = {
 
 const configDefaults = {
   model_dir: null,
+  asr: {
+    engine: "local",
+  },
   hotkey: {
     ctrl: false,
     alt: true,
@@ -78,7 +81,11 @@ const settingsPanel = document.querySelector("#settings-panel");
 const settingsMessage = document.querySelector("#settings-message");
 const modeTabs = document.querySelectorAll("[data-mode-tab]");
 const modePanes = document.querySelectorAll("[data-mode-pane]");
+const asrCloudFields = document.querySelector("#settings-asr-cloud-fields");
 const modelDirInput = document.querySelector("#settings-model-dir");
+const asrApiKey = document.querySelector("#settings-asr-api-key");
+const clearAsrKey = document.querySelector("#settings-clear-asr-key");
+const asrKeyStatus = document.querySelector("#settings-asr-key-status");
 const hotkeyCtrl = document.querySelector("#settings-hotkey-ctrl");
 const hotkeyAlt = document.querySelector("#settings-hotkey-alt");
 const hotkeyShift = document.querySelector("#settings-hotkey-shift");
@@ -92,6 +99,7 @@ const diagConfigPath = document.querySelector("#settings-diag-config-path");
 const diagLogPath = document.querySelector("#settings-diag-log-path");
 const diagModelDir = document.querySelector("#settings-diag-model-dir");
 const diagRuntime = document.querySelector("#settings-diag-runtime");
+const diagAsr = document.querySelector("#settings-diag-asr");
 const diagRewriteKey = document.querySelector("#settings-diag-rewrite-key");
 const rewriteEnabled = document.querySelector("#settings-rewrite-enabled");
 const rewriteEnabledLabel = document.querySelector("#settings-rewrite-enabled-label");
@@ -122,6 +130,7 @@ const store = {
   settingsTab: "input",
   activeVariant: "clean",
   rewriteVariants: {},
+  asrKeySaved: false,
   rewriteKeySaved: false,
   paused: false,
   mode: "floating",
@@ -334,6 +343,10 @@ function normalizeConfig(config) {
   return {
     ...configDefaults,
     ...(config ?? {}),
+    asr: {
+      ...configDefaults.asr,
+      ...(config?.asr ?? {}),
+    },
     hotkey: {
       ...configDefaults.hotkey,
       ...(config?.hotkey ?? {}),
@@ -347,6 +360,7 @@ function normalizeConfig(config) {
 
 function applyConfig(config) {
   store.config = normalizeConfig(config);
+  setAsrEngine(store.config.asr.engine ?? "local");
   modelDirInput.value = store.config.model_dir ?? "";
   hotkeyCtrl.checked = Boolean(store.config.hotkey.ctrl);
   hotkeyAlt.checked = Boolean(store.config.hotkey.alt);
@@ -354,12 +368,16 @@ function applyConfig(config) {
   hotkeyLogo.checked = Boolean(store.config.hotkey.logo);
   hotkeyKey.value = store.config.hotkey.key ?? "Space";
   applyRewriteConfig(store.config.rewrite);
+  updateAsrSummary();
 }
 
 function readConfig() {
   const modelDir = modelDirInput.value.trim();
   return {
     model_dir: modelDir.length > 0 ? modelDir : null,
+    asr: {
+      engine: currentAsrEngine(),
+    },
     hotkey: {
       ctrl: hotkeyCtrl.checked,
       alt: hotkeyAlt.checked,
@@ -395,6 +413,16 @@ function currentRewriteProvider() {
     document.querySelector('input[name="settings-rewrite-provider"]:checked')?.value ??
     rewriteDefaults.provider
   );
+}
+
+function currentAsrEngine() {
+  return document.querySelector('input[name="settings-asr-engine"]:checked')?.value ?? "local";
+}
+
+function setAsrEngine(engine) {
+  document.querySelectorAll('input[name="settings-asr-engine"]').forEach((input) => {
+    input.checked = input.value === engine;
+  });
 }
 
 function applyRewriteConfig(rewrite) {
@@ -447,6 +475,17 @@ function updateRewriteSummary() {
   rewriteChip.textContent = rewriteEnabled.checked ? `改写 ${profile}` : "改写关闭";
   rewriteChip.dataset.enabled = String(rewriteEnabled.checked);
   updateVariantPanel();
+}
+
+function updateAsrSummary() {
+  const engine = currentAsrEngine();
+  const cloud = engine === "cloud";
+  asrCloudFields.hidden = !cloud;
+  asrKeyStatus.textContent = cloud
+    ? store.asrKeySaved
+      ? "DashScope key 已保存"
+      : `未保存，将回退到 ${providerDefaults.dashscope.env}`
+    : "Local 模式不需要 key";
 }
 
 function documentApplyModeHint(mode) {
@@ -503,6 +542,30 @@ async function refreshRewriteKeyStatus() {
     renderSettingsView();
   }
   updateRewriteSummary();
+}
+
+async function refreshAsrKeyStatus() {
+  const engine = currentAsrEngine();
+  if (engine !== "cloud") {
+    store.asrKeySaved = false;
+    updateAsrSummary();
+    return;
+  }
+  if (!invoke) {
+    store.asrKeySaved = false;
+    updateAsrSummary();
+    return;
+  }
+
+  try {
+    const status = await invoke("get_asr_key_status");
+    store.asrKeySaved = Boolean(status?.saved);
+  } catch (error) {
+    store.asrKeySaved = false;
+    store.settingsMessage = String(error);
+    renderSettingsView();
+  }
+  updateAsrSummary();
 }
 
 async function saveRewriteKeyIfNeeded() {
@@ -685,6 +748,12 @@ async function refreshDiagnosticsPanel() {
           ? "运行中，等待重载"
           : "运行中"
       : "未运行";
+    diagAsr.textContent =
+      diagnostics.asr_engine === "cloud"
+        ? diagnostics.asr_key_saved
+          ? "cloud（key 已保存）"
+          : "cloud（key 缺失）"
+        : "local";
     diagRewriteKey.textContent = diagnostics.rewrite_key_saved
       ? `${diagnostics.rewrite_provider} 已保存`
       : `${diagnostics.rewrite_provider} 未保存`;
@@ -762,6 +831,7 @@ async function boot() {
     renderModeVisibility();
     void applyWindowChrome("voice-pad");
   }
+  await refreshAsrKeyStatus();
   await refreshRewriteKeyStatus();
   store.settingsMessage = "运行中";
   renderSettingsView();
@@ -959,6 +1029,37 @@ document.querySelectorAll('input[name="settings-rewrite-provider"]').forEach((in
     await refreshRewriteKeyStatus();
   });
 });
+document.querySelectorAll('input[name="settings-asr-engine"]').forEach((input) => {
+  input.addEventListener("change", async () => {
+    asrApiKey.value = "";
+    await refreshAsrKeyStatus();
+  });
+});
+
+clearAsrKey.addEventListener("click", async () => {
+  store.settingsMessage = "清除中...";
+  renderSettingsView();
+  try {
+    if (!invoke) {
+      asrApiKey.value = "";
+      store.asrKeySaved = false;
+      updateAsrSummary();
+      store.settingsMessage = "预览模式";
+      renderSettingsView();
+      return;
+    }
+
+    const status = await invoke("delete_asr_key");
+    asrApiKey.value = "";
+    store.asrKeySaved = Boolean(status?.saved);
+    updateAsrSummary();
+    store.settingsMessage = "ASR API key 已清除";
+    renderSettingsView();
+  } catch (error) {
+    store.settingsMessage = String(error);
+    renderSettingsView();
+  }
+});
 
 clearRewriteKey.addEventListener("click", async () => {
   store.settingsMessage = "清除中...";
@@ -1031,8 +1132,18 @@ saveSettings.addEventListener("click", async () => {
       return;
     }
 
+    if (currentAsrEngine() === "cloud" && asrApiKey.value.trim()) {
+      const status = await invoke("save_asr_key", {
+        request: { api_key: asrApiKey.value.trim() },
+      });
+      store.asrKeySaved = Boolean(status?.saved);
+      asrApiKey.value = "";
+      updateAsrSummary();
+    }
+
     const config = await invoke("save_config", { config: readConfig() });
     applyConfig(config);
+    await refreshAsrKeyStatus();
     store.settingsMessage = "已保存并重新加载";
     renderSettingsView();
   } catch (error) {

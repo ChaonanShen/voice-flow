@@ -200,10 +200,37 @@
         </div>
 
         <div class="settings-pane" data-settings-pane="input">
+          <div class="field">
+            <span>ASR 引擎</span>
+            <div class="segmented" role="radiogroup" aria-label="ASR engine">
+              <label>
+                <input type="radio" name="settings-asr-engine" value="local" />
+                <span>Local</span>
+              </label>
+              <label>
+                <input type="radio" name="settings-asr-engine" value="cloud" />
+                <span>Cloud</span>
+              </label>
+            </div>
+          </div>
+
           <label class="field">
             <span>模型目录</span>
             <input id="settings-model-dir" type="text" spellcheck="false" />
           </label>
+
+          <div id="settings-asr-cloud-fields" class="settings-asr-cloud-fields" hidden>
+            <label class="field">
+              <span>DashScope API key</span>
+              <input id="settings-asr-api-key" type="password" autocomplete="off" />
+            </label>
+            <div class="key-actions">
+              <button id="settings-clear-asr-key" type="button">清除 key</button>
+              <span id="settings-asr-key-status">未保存</span>
+            </div>
+            <p class="pane-note">Cloud ASR 使用 DashScope Paraformer-realtime-v2。API key 保存到系统凭据管理器，不写入 app.toml。</p>
+          </div>
+
           <div class="hotkey-grid" aria-label="快捷键设置">
             <label><input id="settings-hotkey-ctrl" type="checkbox" />Ctrl</label>
             <label><input id="settings-hotkey-alt" type="checkbox" />Alt</label>
@@ -296,6 +323,8 @@
             <strong id="settings-diag-model-dir">-</strong>
             <span>Runtime</span>
             <strong id="settings-diag-runtime">-</strong>
+            <span>ASR</span>
+            <strong id="settings-diag-asr">-</strong>
             <span>Rewrite key</span>
             <strong id="settings-diag-rewrite-key">-</strong>
           </div>

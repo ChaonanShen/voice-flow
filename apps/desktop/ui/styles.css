@@ -924,6 +924,15 @@ select {
   min-width: 0;
 }
 
+.settings-mode .settings-asr-cloud-fields {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid #d8dee8;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
 .settings-mode .key-actions {
   display: grid;
   grid-template-columns: 84px minmax(0, 1fr);

@@ -5,6 +5,7 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use crate::engine::EngineKind;
 use voice_rewrite::{Profile, RewriteProvider, DEFAULT_REWRITE_MODEL, DEFAULT_REWRITE_TIMEOUT};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -12,6 +13,7 @@ use voice_rewrite::{Profile, RewriteProvider, DEFAULT_REWRITE_MODEL, DEFAULT_REW
 pub struct AppConfig {
     pub model_dir: Option<String>,
     pub hotkey: HotkeyConfig,
+    pub asr: AsrConfig,
     pub rewrite: RewriteConfig,
 }
 
@@ -20,6 +22,7 @@ impl Default for AppConfig {
         Self {
             model_dir: None,
             hotkey: HotkeyConfig::default(),
+            asr: AsrConfig::default(),
             rewrite: RewriteConfig::default(),
         }
     }
@@ -64,6 +67,20 @@ impl HotkeyConfig {
         }
         parts.push(self.key.clone());
         parts.join("+")
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct AsrConfig {
+    pub engine: EngineKind,
+}
+
+impl Default for AsrConfig {
+    fn default() -> Self {
+        Self {
+            engine: EngineKind::Local,
+        }
     }
 }
 
@@ -166,6 +183,7 @@ mod tests {
         assert_eq!(config.hotkey.logo, false);
         assert_eq!(config.hotkey.key, "Space");
         assert_eq!(config.hotkey.to_label(), "Alt+Space");
+        assert_eq!(config.asr, AsrConfig::default());
         assert_eq!(config.rewrite, RewriteConfig::default());
     }
 
@@ -182,6 +200,9 @@ mod tests {
                 shift: true,
                 logo: false,
                 key: "M".to_string(),
+            },
+            asr: AsrConfig {
+                engine: EngineKind::Cloud,
             },
             rewrite: RewriteConfig {
                 enabled: true,
@@ -207,6 +228,7 @@ mod tests {
         let loaded = AppConfig::read_from(&path).unwrap();
         assert_eq!(loaded.model_dir.as_deref(), Some("C:/models"));
         assert_eq!(loaded.hotkey, HotkeyConfig::default());
+        assert_eq!(loaded.asr, AsrConfig::default());
         assert_eq!(loaded.rewrite, RewriteConfig::default());
     }
 
@@ -239,5 +261,22 @@ timeout_ms = 2500
         assert_eq!(loaded.rewrite.timeout_ms, 2_500);
         assert_eq!(loaded.rewrite.user_dictionary["克劳德"], "Claude");
         assert_eq!(loaded.rewrite.user_dictionary["我推"], "Vue");
+    }
+
+    #[test]
+    fn parse_asr_section() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("app.toml");
+        fs::write(
+            &path,
+            r#"
+[asr]
+engine = "cloud"
+"#,
+        )
+        .unwrap();
+
+        let loaded = AppConfig::read_from(&path).unwrap();
+        assert_eq!(loaded.asr.engine, EngineKind::Cloud);
     }
 }
