@@ -8,12 +8,21 @@ use std::collections::HashMap;
 use crate::engine::EngineKind;
 use voice_rewrite::{Profile, RewriteProvider, DEFAULT_REWRITE_MODEL, DEFAULT_REWRITE_TIMEOUT};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum DesktopOutputModeConfig {
+    #[default]
+    FloatingInput,
+    VoicePad,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AppConfig {
     pub model_dir: Option<String>,
     pub hotkey: HotkeyConfig,
     pub asr: AsrConfig,
+    pub desktop: DesktopConfig,
     pub rewrite: RewriteConfig,
 }
 
@@ -23,6 +32,7 @@ impl Default for AppConfig {
             model_dir: None,
             hotkey: HotkeyConfig::default(),
             asr: AsrConfig::default(),
+            desktop: DesktopConfig::default(),
             rewrite: RewriteConfig::default(),
         }
     }
@@ -80,6 +90,20 @@ impl Default for AsrConfig {
     fn default() -> Self {
         Self {
             engine: EngineKind::Local,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct DesktopConfig {
+    pub output_mode: DesktopOutputModeConfig,
+}
+
+impl Default for DesktopConfig {
+    fn default() -> Self {
+        Self {
+            output_mode: DesktopOutputModeConfig::FloatingInput,
         }
     }
 }
@@ -184,6 +208,7 @@ mod tests {
         assert_eq!(config.hotkey.key, "Space");
         assert_eq!(config.hotkey.to_label(), "Alt+Space");
         assert_eq!(config.asr, AsrConfig::default());
+        assert_eq!(config.desktop, DesktopConfig::default());
         assert_eq!(config.rewrite, RewriteConfig::default());
     }
 
@@ -203,6 +228,9 @@ mod tests {
             },
             asr: AsrConfig {
                 engine: EngineKind::Cloud,
+            },
+            desktop: DesktopConfig {
+                output_mode: DesktopOutputModeConfig::VoicePad,
             },
             rewrite: RewriteConfig {
                 enabled: true,
@@ -229,6 +257,7 @@ mod tests {
         assert_eq!(loaded.model_dir.as_deref(), Some("C:/models"));
         assert_eq!(loaded.hotkey, HotkeyConfig::default());
         assert_eq!(loaded.asr, AsrConfig::default());
+        assert_eq!(loaded.desktop, DesktopConfig::default());
         assert_eq!(loaded.rewrite, RewriteConfig::default());
     }
 
@@ -278,5 +307,22 @@ engine = "cloud"
 
         let loaded = AppConfig::read_from(&path).unwrap();
         assert_eq!(loaded.asr.engine, EngineKind::Cloud);
+    }
+
+    #[test]
+    fn parse_desktop_section() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("app.toml");
+        fs::write(
+            &path,
+            r#"
+[desktop]
+output_mode = "voice_pad"
+"#,
+        )
+        .unwrap();
+
+        let loaded = AppConfig::read_from(&path).unwrap();
+        assert_eq!(loaded.desktop.output_mode, DesktopOutputModeConfig::VoicePad);
     }
 }

@@ -24,7 +24,9 @@ use voice_asr_local::{StreamingZipformer, DEFAULT_STREAMING_ZIPFORMER_DIR, MODEL
 use voice_core::asr::AsrEngine;
 use voice_core::capture::AudioFormat;
 use voice_core::clipboard::{ClipboardWriter, SystemClipboard};
-use voice_core::config::{AppConfig, AsrConfig, HotkeyConfig, RewriteConfig};
+use voice_core::config::{
+    AppConfig, AsrConfig, DesktopOutputModeConfig, HotkeyConfig, RewriteConfig,
+};
 use voice_core::cpal_backend::CpalCapture;
 use voice_core::engine::{resolve_engine_selection, EngineKind, EngineSelection};
 use voice_core::hotkey::PushToTalkEvent;
@@ -72,6 +74,22 @@ impl DesktopOutputMode {
         match self {
             Self::FloatingInput => "floating_input",
             Self::VoicePad => "voice_pad",
+        }
+    }
+
+    fn to_config(self) -> DesktopOutputModeConfig {
+        match self {
+            Self::FloatingInput => DesktopOutputModeConfig::FloatingInput,
+            Self::VoicePad => DesktopOutputModeConfig::VoicePad,
+        }
+    }
+}
+
+impl From<DesktopOutputModeConfig> for DesktopOutputMode {
+    fn from(value: DesktopOutputModeConfig) -> Self {
+        match value {
+            DesktopOutputModeConfig::FloatingInput => Self::FloatingInput,
+            DesktopOutputModeConfig::VoicePad => Self::VoicePad,
         }
     }
 }
@@ -374,15 +392,19 @@ fn set_output_mode(
     output_mode: DesktopOutputMode,
     app: AppHandle,
     state: State<'_, DesktopState>,
-) -> DesktopOutputMode {
-    state
-        .runtime
-        .lock()
-        .expect("runtime mutex poisoned")
-        .output_mode = output_mode;
+) -> Result<DesktopOutputMode, String> {
+    let config = {
+        let mut runtime = state.runtime.lock().expect("runtime mutex poisoned");
+        runtime.output_mode = output_mode;
+        runtime.config.desktop.output_mode = output_mode.to_config();
+        runtime.config.clone()
+    };
+    config
+        .write_to(config_path())
+        .map_err(|e| format!("failed to persist desktop output mode: {e}"))?;
     append_log(format!("output mode set to {}", output_mode.label()));
     emit_output_mode(&app, output_mode);
-    output_mode
+    Ok(output_mode)
 }
 
 #[tauri::command]
@@ -467,13 +489,14 @@ fn validate_hotkey_config(config: &HotkeyConfig) -> Result<(), String> {
 
 fn main() {
     let config = load_config();
+    let output_mode = DesktopOutputMode::from(config.desktop.output_mode);
     let state = DesktopState {
         runtime: Arc::new(Mutex::new(RuntimeState {
             config,
             running: false,
             restart_requested: false,
             paused: false,
-            output_mode: DesktopOutputMode::default(),
+            output_mode,
             manual_input: None,
         })),
     };

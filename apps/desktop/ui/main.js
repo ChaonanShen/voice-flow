@@ -48,6 +48,8 @@ const configDefaults = {
 
 const dot = document.querySelector("#document-status-dot");
 const stateLabel = document.querySelector("#document-state-label");
+const startupNotice = document.querySelector("#document-startup-notice");
+const startupText = document.querySelector("#document-startup-text");
 const lastTranscript = document.querySelector("#document-last-text");
 const rewriteChip = document.querySelector("#document-rewrite-chip");
 const outputChip = document.querySelector("#document-output-chip");
@@ -160,6 +162,7 @@ const store = {
   },
   trace: null,
   traceVisible: false,
+  startupNotice: "",
   editorStatus: "",
   settingsMessage: "",
 };
@@ -182,6 +185,8 @@ function renderDocumentMode() {
   stateLabel.textContent = store.paused
     ? "已暂停"
     : labels[store.currentState] ?? labels.idle;
+  startupNotice.hidden = !store.startupNotice;
+  startupText.textContent = store.startupNotice;
   lastTranscript.textContent = store.documentText || "尚无识别结果";
   diffRaw.textContent = store.rawTranscript || "尚无转写结果";
   diffFinal.textContent = store.finalText || "尚无输出结果";
@@ -773,6 +778,12 @@ async function refreshDiagnosticsPanel() {
     diagModelDir.textContent = diagnostics.model_dir
       ? `${diagnostics.model_dir} (${diagnostics.model_dir_exists ? "存在" : "缺失"})`
       : "未配置";
+    store.startupNotice =
+      diagnostics.model_dir_exists
+        ? ""
+        : diagnostics.model_dir
+          ? "当前模型目录不存在，请在设置中修正模型目录后保存。"
+          : "当前尚未配置模型目录，请在设置中填写模型目录后保存。";
     diagRuntime.textContent = diagnostics.runtime_running
       ? diagnostics.paused
         ? "已暂停"
@@ -791,6 +802,7 @@ async function refreshDiagnosticsPanel() {
       : `${diagnostics.rewrite_provider} 未保存`;
     outputChip.textContent =
       diagnostics.output_mode === "voice_pad" ? "输出到文稿" : "输出到外部应用";
+    renderRuntimeViews();
   } catch (error) {
     store.settingsMessage = String(error);
     renderSettingsView();
