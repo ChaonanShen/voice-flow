@@ -303,6 +303,8 @@ GUI 应主要监听事件，而不是轮询 runtime：
 | G4.5a.3 | `feat(desktop): add desktop mode navigation` | 主窗口增加 Voice Pad / Floating Input / Settings 模式切换 |
 | G4.5a.4 | `feat(desktop): add voice pad editor` | Voice Pad 添加编辑区、last transcript、final text、copy 和 variants 展示 |
 | G4.5a.5 | `feat(desktop): refine floating input panel` | Floating Input 保留自动粘贴链路，压缩为状态、profile、摘要、fallback 入口 |
+| G4.5a.5a | `feat(desktop): compact floating mic window` | Floating Input 默认显示为小圆形麦克风悬浮窗，设置页按需展开 |
+| G4.5a.5b | `feat(desktop): record from floating mic` | 小麦克风点击开始 / 结束录音，仍复用现有 push-to-talk pipeline |
 | G4.5a.6 | `docs(desktop): document dual mode usage` | README 或 GUI 文档补充两种模式说明 |
 
 执行约束：
@@ -326,6 +328,10 @@ GUI 应主要监听事件，而不是轮询 runtime：
 
 - 已完成 G4.5a.3 的第一步：主窗口增加 `Floating Input | Settings` 模式切换，Settings 不再只是临时展开面板。
 - 已完成 G4.5a.5 的第一步：Floating Input 压缩为状态面板，保留状态、profile、输出目标、最近输出、fallback / latency 和 variants 入口。
+- 已完成 G4.5a.5a：Floating Input 默认窗口缩小为 132x132 的透明小圆形麦克风悬浮窗；进入 Settings 时窗口展开到 460x360，返回 Floating Input 时缩回。
+- 已完成悬浮窗拖拽能力：使用 Tauri `data-tauri-drag-region` 和 `core:window:allow-start-dragging`，小窗顶部拖拽条和设置页标题栏可拖动窗口。
+- 已完成 G4.5a.5b：小麦克风点击开始 / 结束录音，后端只向 runtime 注入 `PushToTalkEvent::Pressed / Released`，ASR、rewrite、clipboard、paste 仍走原有 pipeline；`Alt+Space` 快捷键链路保持可用。
+- Floating Input 悬浮态设置为 non-focusable，目标是减少点击小窗时抢走外部输入框焦点；Settings 模式切回 focusable，保证设置表单可编辑。
 - 暂未引入 Voice Pad，也暂未改变 runtime output adapter；当前自动粘贴链路仍保持 Floating Input 现状。
 
 ### G5：快捷键、粘贴和 Windows 实机兼容
