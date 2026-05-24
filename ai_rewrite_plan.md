@@ -909,7 +909,10 @@ GUI 不另起独立 browser app。当前桌面端已经是 Tauri，前端就是 
 - R2.1~R2.8 已完成：`polish` / `email` / `wechat` / `commit` / `bullets` / `prompt` / `multi` profiles、语音命令识别、multi JSON 解析和 mock 覆盖都已落地。
 - R2.9~R2.10 已完成到 provider 层：DeepSeek / DashScope / OpenAI 共用 `OpenAiCompatClient`，CLI 暴露 `--provider` / `--rewrite-provider`。
 - R2.11 已完成：`app.toml [rewrite]` schema、默认关闭策略、用户词典、provider/model/profile/timeout 读写，以及 `voice-core::text_pipeline` 非 GUI glue。
-- R2.12~R2.17 属于 GUI：按 G1 Web 化 UI → G2 Tauri bridge → G3 Windows 实机顺序后置；不单独做 browser app。
+- R2.12~R2.13 已完成：Tauri 内 Web UI 已支持 rewrite 开关、profile/provider/model/timeout 设置，并通过 command 读写 `app.toml [rewrite]`。
+- R2.15~R2.17 已完成到 G2：悬浮窗显示当前 rewrite profile，`RealtimeState::Rewriting` 已由 desktop runtime 真实发出，multi variants 已从 mock 改为监听 `rewrite-result` 事件。
+- R2.14 仍后置：API key 目前仍走环境变量 / `.env`，Windows Credential Manager keyring 存储放到 G3。
+- Day 2 剩余验证：Windows 实机用真实录音 + 真实 LLM 跑 email / voice command / multi 三条验收路径。
 
 ### 9.3 Day 3：包装、demo、收尾
 
