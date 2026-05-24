@@ -9,7 +9,8 @@ use std::thread;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use serde::Serialize;
+use keyring::{Entry, Error as KeyringError};
+use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, State};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 use voice_asr_local::{StreamingZipformer, DEFAULT_STREAMING_ZIPFORMER_DIR, MODEL_DIR_ENV};
@@ -23,10 +24,11 @@ use voice_core::paste::{PasteSimulator, SystemPaste};
 use voice_core::push_to_talk::{PushToTalkRecorder, PushToTalkRecorderEvent};
 use voice_core::state::{RealtimeState, RealtimeStateEvent};
 use voice_core::text_pipeline::rewrite_settings_from_config;
-use voice_rewrite::{RewriteError, RewriteResult};
+use voice_rewrite::{RewriteError, RewriteProvider, RewriteResult};
 
 const SAMPLE_RATE: u32 = 16_000;
 const CHANNELS: u16 = 1;
+const REWRITE_KEYRING_SERVICE: &str = "voice-flow";
 
 #[derive(Clone)]
 struct DesktopState {
@@ -55,6 +57,24 @@ struct RewriteResultEvent {
     variants: HashMap<String, String>,
     fallback: bool,
     error: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct RewriteKeyRequest {
+    provider: RewriteProvider,
+    api_key: String,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct RewriteKeyProviderRequest {
+    provider: RewriteProvider,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct RewriteKeyStatus {
+    provider: RewriteProvider,
+    saved: bool,
+    source: &'static str,
 }
 
 #[tauri::command]
@@ -110,6 +130,57 @@ fn save_rewrite_config(
 }
 
 #[tauri::command]
+fn get_rewrite_key_status(request: RewriteKeyProviderRequest) -> Result<RewriteKeyStatus, String> {
+    rewrite_key_status(request.provider).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn save_rewrite_key(
+    request: RewriteKeyRequest,
+    state: State<'_, DesktopState>,
+) -> Result<RewriteKeyStatus, String> {
+    let key = request.api_key.trim();
+    if key.is_empty() {
+        return Err("API key cannot be empty".to_string());
+    }
+
+    let entry = rewrite_key_entry(request.provider)
+        .map_err(|e| format!("failed to open API key store: {e}"))?;
+    entry
+        .set_password(key)
+        .map_err(|e| format!("failed to save API key: {e}"))?;
+
+    state
+        .runtime
+        .lock()
+        .expect("runtime mutex poisoned")
+        .restart_requested = true;
+
+    rewrite_key_status(request.provider).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn delete_rewrite_key(
+    request: RewriteKeyProviderRequest,
+    state: State<'_, DesktopState>,
+) -> Result<RewriteKeyStatus, String> {
+    let entry = rewrite_key_entry(request.provider)
+        .map_err(|e| format!("failed to open API key store: {e}"))?;
+    match entry.delete_credential() {
+        Ok(()) | Err(KeyringError::NoEntry) => {}
+        Err(err) => return Err(format!("failed to clear API key: {err}")),
+    }
+
+    state
+        .runtime
+        .lock()
+        .expect("runtime mutex poisoned")
+        .restart_requested = true;
+
+    rewrite_key_status(request.provider).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn start_runtime(app: AppHandle, state: State<'_, DesktopState>) -> Result<(), String> {
     let runtime = state.runtime.clone();
     {
@@ -146,6 +217,9 @@ fn main() {
             get_rewrite_config,
             save_config,
             save_rewrite_config,
+            get_rewrite_key_status,
+            save_rewrite_key,
+            delete_rewrite_key,
             start_runtime
         ])
         .setup(|app| {
@@ -291,7 +365,17 @@ fn maybe_rewrite_transcript(
     }
 
     emit_state(app, RealtimeStateEvent::new(RealtimeState::Rewriting));
-    let engine = rewrite_settings_from_config(rewrite)
+    let mut settings = rewrite_settings_from_config(rewrite);
+    match read_rewrite_key(rewrite.provider) {
+        Ok(Some(api_key)) => {
+            settings = settings.with_api_key(api_key);
+        }
+        Ok(None) => {}
+        Err(err) => {
+            eprintln!("rewrite keyring read failed: {err:#}");
+        }
+    }
+    let engine = settings
         .build_engine()
         .context("failed to initialize rewrite engine")?;
     let result = run_rewrite(engine.process(transcript))?;
@@ -304,6 +388,26 @@ fn maybe_rewrite_transcript(
 
     emit_rewrite_result(app, &result);
     Ok(result.main)
+}
+
+fn rewrite_key_status(provider: RewriteProvider) -> Result<RewriteKeyStatus> {
+    Ok(RewriteKeyStatus {
+        provider,
+        saved: read_rewrite_key(provider)?.is_some(),
+        source: "keyring",
+    })
+}
+
+fn read_rewrite_key(provider: RewriteProvider) -> Result<Option<String>> {
+    match rewrite_key_entry(provider)?.get_password() {
+        Ok(key) => Ok(Some(key)),
+        Err(KeyringError::NoEntry) => Ok(None),
+        Err(err) => Err(anyhow::anyhow!(err)),
+    }
+}
+
+fn rewrite_key_entry(provider: RewriteProvider) -> Result<Entry> {
+    Entry::new(REWRITE_KEYRING_SERVICE, provider.label()).map_err(|e| anyhow::anyhow!(e))
 }
 
 fn run_rewrite<F>(future: F) -> Result<RewriteResult>

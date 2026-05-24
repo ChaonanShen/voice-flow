@@ -141,8 +141,13 @@
             </label>
             <label class="field">
               <span>API key</span>
-              <input id="rewrite-api-key" type="password" disabled />
+              <input id="rewrite-api-key" type="password" autocomplete="off" />
             </label>
+          </div>
+
+          <div class="key-actions">
+            <button id="clear-rewrite-key" type="button">清除 key</button>
+            <span id="rewrite-key-status">未保存</span>
           </div>
 
           <div class="rewrite-summary" aria-label="当前改写设置">
@@ -150,7 +155,7 @@
             <span id="rewrite-profile-summary">clean</span>
             <span id="rewrite-key-summary">DEEPSEEK_API_KEY</span>
           </div>
-          <p class="pane-note">设置会写入 app.toml，API key 和 keyring 接线在下一步。</p>
+          <p class="pane-note">API key 会保存到系统凭据管理器，不写入 app.toml；留空保存只更新改写设置。</p>
         </div>
 
         <div class="settings-actions">

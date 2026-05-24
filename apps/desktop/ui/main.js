@@ -69,6 +69,9 @@ const rewriteEnabledLabel = document.querySelector("#rewrite-enabled-label");
 const rewriteProfile = document.querySelector("#rewrite-profile");
 const rewriteModel = document.querySelector("#rewrite-model");
 const rewriteTimeout = document.querySelector("#rewrite-timeout");
+const rewriteApiKey = document.querySelector("#rewrite-api-key");
+const clearRewriteKey = document.querySelector("#clear-rewrite-key");
+const rewriteKeyStatus = document.querySelector("#rewrite-key-status");
 const rewriteProviderSummary = document.querySelector("#rewrite-provider-summary");
 const rewriteProfileSummary = document.querySelector("#rewrite-profile-summary");
 const rewriteKeySummary = document.querySelector("#rewrite-key-summary");
@@ -79,6 +82,7 @@ let configSnapshot = normalizeConfig(configDefaults);
 let activeSettingsTab = "input";
 let activeVariant = "clean";
 let rewriteVariants = {};
+let rewriteKeySaved = false;
 
 function applyState(event) {
   const state = event?.state ?? "idle";
@@ -181,6 +185,7 @@ function applyRewriteConfig(rewrite) {
   rewriteModel.value =
     config.model ?? providerDefaults[currentRewriteProvider()]?.model ?? "";
   rewriteTimeout.value = String(config.timeout_ms ?? rewriteDefaults.timeout_ms);
+  rewriteApiKey.value = "";
   rewriteVariants = {};
   updateRewriteSummary();
 }
@@ -212,9 +217,48 @@ function updateRewriteSummary() {
   rewriteProviderSummary.textContent = provider;
   rewriteProfileSummary.textContent = profile;
   rewriteKeySummary.textContent = meta.env;
+  rewriteKeyStatus.textContent = rewriteKeySaved
+    ? `${provider} key 已保存`
+    : `未保存，将回退到 ${meta.env}`;
   rewriteChip.textContent = rewriteEnabled.checked ? `改写 ${profile}` : "改写关闭";
   rewriteChip.dataset.enabled = String(rewriteEnabled.checked);
   updateVariantPanel();
+}
+
+async function refreshRewriteKeyStatus() {
+  const provider = currentRewriteProvider();
+  if (!invoke) {
+    rewriteKeySaved = false;
+    updateRewriteSummary();
+    return;
+  }
+
+  try {
+    const status = await invoke("get_rewrite_key_status", {
+      request: { provider },
+    });
+    rewriteKeySaved = Boolean(status?.saved);
+  } catch (error) {
+    rewriteKeySaved = false;
+    settingsMessage.textContent = String(error);
+  }
+  updateRewriteSummary();
+}
+
+async function saveRewriteKeyIfNeeded() {
+  const apiKey = rewriteApiKey.value.trim();
+  if (!apiKey) {
+    return;
+  }
+
+  const status = await invoke("save_rewrite_key", {
+    request: {
+      provider: currentRewriteProvider(),
+      api_key: apiKey,
+    },
+  });
+  rewriteApiKey.value = "";
+  rewriteKeySaved = Boolean(status?.saved);
 }
 
 function switchSettingsTab(tab) {
@@ -266,6 +310,7 @@ async function boot() {
 
   applyConfig(await invoke("get_config"));
   applyRewriteConfig(await invoke("get_rewrite_config"));
+  await refreshRewriteKeyStatus();
   settingsMessage.textContent = "运行中";
   await invoke("start_runtime");
 }
@@ -284,12 +329,36 @@ variantTabs.forEach((button) => {
   button.addEventListener("click", () => switchVariantTab(button.dataset.variantTab));
 });
 document.querySelectorAll('input[name="rewrite-provider"]').forEach((input) => {
-  input.addEventListener("change", () => {
+  input.addEventListener("change", async () => {
     if (!rewriteModel.value.trim()) {
       rewriteModel.value = providerDefaults[currentRewriteProvider()]?.model ?? "";
     }
-    updateRewriteSummary();
+    rewriteApiKey.value = "";
+    await refreshRewriteKeyStatus();
   });
+});
+
+clearRewriteKey.addEventListener("click", async () => {
+  settingsMessage.textContent = "清除中...";
+  try {
+    if (!invoke) {
+      rewriteApiKey.value = "";
+      rewriteKeySaved = false;
+      updateRewriteSummary();
+      settingsMessage.textContent = "预览模式";
+      return;
+    }
+
+    const status = await invoke("delete_rewrite_key", {
+      request: { provider: currentRewriteProvider() },
+    });
+    rewriteApiKey.value = "";
+    rewriteKeySaved = Boolean(status?.saved);
+    updateRewriteSummary();
+    settingsMessage.textContent = "API key 已清除";
+  } catch (error) {
+    settingsMessage.textContent = String(error);
+  }
 });
 
 saveSettings.addEventListener("click", async () => {
@@ -305,7 +374,9 @@ saveSettings.addEventListener("click", async () => {
       const rewrite = await invoke("save_rewrite_config", {
         rewrite: readRewriteConfig(),
       });
+      await saveRewriteKeyIfNeeded();
       applyRewriteConfig(rewrite);
+      await refreshRewriteKeyStatus();
       settingsMessage.textContent = "改写设置已保存";
     } catch (error) {
       settingsMessage.textContent = String(error);

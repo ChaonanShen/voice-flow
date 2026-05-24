@@ -414,6 +414,32 @@ h1 {
   min-width: 0;
 }
 
+.key-actions {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+}
+
+.key-actions button {
+  height: 28px;
+  border: 1px solid #cfd7e3;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #243344;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+#rewrite-key-status {
+  overflow: hidden;
+  color: #596579;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .rewrite-summary {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
