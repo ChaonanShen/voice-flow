@@ -105,107 +105,126 @@ const windowSizes = {
   "voice-pad": { width: 560, height: 420 },
   settings: { width: 460, height: 360 },
 };
-let configSnapshot = normalizeConfig(configDefaults);
-let activeSettingsTab = "input";
-let activeVariant = "clean";
-let rewriteVariants = {};
-let rewriteKeySaved = false;
-let paused = false;
-let activeMode = "floating";
-let previousContentMode = "floating";
-let currentState = "idle";
-let manualRecording = false;
+const store = {
+  config: normalizeConfig(configDefaults),
+  settingsTab: "input",
+  activeVariant: "clean",
+  rewriteVariants: {},
+  rewriteKeySaved: false,
+  paused: false,
+  mode: "floating",
+  previousContentMode: "floating",
+  currentState: "idle",
+  manualRecording: false,
+  documentText: "",
+  runtimeError: "",
+  resultMeta: {
+    fallbackReason: "",
+    latencySummary: "",
+  },
+  settingsMessage: "",
+};
 let activeContextMenu = null;
+
+function renderFloatingMode() {
+  const state = store.manualRecording ? "recording" : store.currentState;
+  micButton.dataset.state = store.paused ? "idle" : state;
+  micButton.dataset.paused = String(store.paused);
+  micButton.dataset.manualRecording = String(store.manualRecording);
+  micButton.title = store.paused
+    ? "监听已暂停"
+    : store.manualRecording
+      ? "点击结束录音"
+      : "点击开始/结束；Alt+Space 按住说话";
+}
+
+function renderDocumentMode() {
+  dot.dataset.state = store.paused ? "idle" : store.currentState;
+  stateLabel.textContent = store.paused
+    ? "已暂停"
+    : labels[store.currentState] ?? labels.idle;
+  lastTranscript.textContent = store.documentText || "尚无识别结果";
+  runtimeError.hidden = !store.runtimeError;
+  runtimeErrorText.textContent = store.runtimeError;
+  pauseToggle.dataset.active = String(store.paused);
+  pauseToggle.title = store.paused ? "恢复监听" : "暂停监听";
+  pauseToggle.querySelector("span").textContent = store.paused ? ">" : "||";
+}
+
+function renderSettingsView() {
+  settingsMessage.textContent = store.settingsMessage;
+}
+
+function renderRuntimeViews() {
+  renderFloatingMode();
+  renderDocumentMode();
+  renderSettingsView();
+}
 
 function applyState(event) {
   const state = event?.state ?? "idle";
-  currentState = state;
-  dot.dataset.state = state;
-  micButton.dataset.state = state;
-  if (state !== "recording" && manualRecording) {
+  store.currentState = state;
+  if (state !== "recording" && store.manualRecording) {
     setManualRecording(false);
   } else {
-    updateMicTitle();
+    renderFloatingMode();
   }
-  stateLabel.textContent = paused ? "已暂停" : labels[state] ?? labels.idle;
 
   if (state !== "error") {
-    runtimeError.hidden = true;
-    runtimeErrorText.textContent = "";
+    store.runtimeError = "";
   }
 
   if (["recording", "transcribing", "rewriting"].includes(state)) {
-    rewriteVariants = {};
+    store.rewriteVariants = {};
     updateVariantPanel();
   }
 
   if (event?.transcript) {
-    lastTranscript.textContent = event.transcript;
+    store.documentText = event.transcript;
   }
 
   if (event?.error) {
     const message = String(event.error);
-    runtimeError.hidden = false;
-    runtimeErrorText.textContent = message;
-    settingsMessage.textContent = message;
+    store.runtimeError = message;
+    store.settingsMessage = message;
   }
+  renderRuntimeViews();
 }
 
 function applyPauseState(event) {
-  paused = Boolean(event?.paused);
-  pauseToggle.dataset.active = String(paused);
-  micButton.dataset.paused = String(paused);
-  pauseToggle.title = paused ? "恢复监听" : "暂停监听";
-  if (paused) {
+  store.paused = Boolean(event?.paused);
+  if (store.paused) {
     setManualRecording(false);
-  } else {
-    updateMicTitle();
   }
-  pauseToggle.querySelector("span").textContent = paused ? ">" : "||";
-  if (paused) {
-    dot.dataset.state = "idle";
-    micButton.dataset.state = "idle";
-    stateLabel.textContent = "已暂停";
-  } else if (stateLabel.textContent === "已暂停") {
-    stateLabel.textContent = labels.idle;
-  }
-  if (activeSettingsTab === "diagnostics") {
+  renderRuntimeViews();
+  if (store.settingsTab === "diagnostics") {
     refreshDiagnosticsPanel();
   }
 }
 
 function setManualRecording(active) {
-  manualRecording = Boolean(active);
-  micButton.dataset.manualRecording = String(manualRecording);
-  if (manualRecording) {
-    micButton.dataset.state = "recording";
-  }
-  updateMicTitle();
-}
-
-function updateMicTitle() {
-  micButton.title = paused
-    ? "监听已暂停"
-    : manualRecording
-      ? "点击结束录音"
-      : "点击开始/结束；Alt+Space 按住说话";
+  store.manualRecording = Boolean(active);
+  renderFloatingMode();
 }
 
 function applyRewriteResult(result) {
-  rewriteVariants = {
+  store.rewriteVariants = {
     clean: result?.text ?? "",
     ...(result?.variants ?? {}),
   };
-  activeVariant = rewriteVariants[activeVariant] ? activeVariant : "clean";
+  store.activeVariant = store.rewriteVariants[store.activeVariant]
+    ? store.activeVariant
+    : "clean";
   variantActionStatus.textContent = "";
-  if (rewriteVariants.clean) {
-    lastTranscript.textContent = rewriteVariants.clean;
+  if (store.rewriteVariants.clean) {
+    store.documentText = store.rewriteVariants.clean;
   }
   if (result?.fallback && result.error) {
-    settingsMessage.textContent = result.error;
+    store.settingsMessage = result.error;
   }
   updateResultMeta(result);
   updateVariantPanel();
+  renderRuntimeViews();
 }
 
 function updateResultMeta(result) {
@@ -222,9 +241,13 @@ function updateResultMeta(result) {
   }
 
   const reason = result?.fallback ? result?.error ?? "rewrite fallback" : "";
-  fallbackReason.textContent = reason ? `fallback: ${reason}` : "";
+  store.resultMeta = {
+    fallbackReason: reason ? `fallback: ${reason}` : "",
+    latencySummary: parts.join(" / "),
+  };
+  fallbackReason.textContent = store.resultMeta.fallbackReason;
   fallbackReason.dataset.active = String(Boolean(reason));
-  latencySummary.textContent = parts.join(" / ");
+  latencySummary.textContent = store.resultMeta.latencySummary;
   resultMeta.hidden = !reason && parts.length === 0;
 }
 
@@ -244,14 +267,14 @@ function normalizeConfig(config) {
 }
 
 function applyConfig(config) {
-  configSnapshot = normalizeConfig(config);
-  modelDirInput.value = configSnapshot.model_dir ?? "";
-  hotkeyCtrl.checked = Boolean(configSnapshot.hotkey.ctrl);
-  hotkeyAlt.checked = Boolean(configSnapshot.hotkey.alt);
-  hotkeyShift.checked = Boolean(configSnapshot.hotkey.shift);
-  hotkeyLogo.checked = Boolean(configSnapshot.hotkey.logo);
-  hotkeyKey.value = configSnapshot.hotkey.key ?? "Space";
-  applyRewriteConfig(configSnapshot.rewrite);
+  store.config = normalizeConfig(config);
+  modelDirInput.value = store.config.model_dir ?? "";
+  hotkeyCtrl.checked = Boolean(store.config.hotkey.ctrl);
+  hotkeyAlt.checked = Boolean(store.config.hotkey.alt);
+  hotkeyShift.checked = Boolean(store.config.hotkey.shift);
+  hotkeyLogo.checked = Boolean(store.config.hotkey.logo);
+  hotkeyKey.value = store.config.hotkey.key ?? "Space";
+  applyRewriteConfig(store.config.rewrite);
 }
 
 function readConfig() {
@@ -265,7 +288,7 @@ function readConfig() {
       logo: hotkeyLogo.checked,
       key: hotkeyKey.value.trim() || "Space",
     },
-    rewrite: configSnapshot.rewrite,
+    rewrite: store.config.rewrite,
   };
 }
 
@@ -297,8 +320,8 @@ function currentRewriteProvider() {
 
 function applyRewriteConfig(rewrite) {
   const config = { ...rewriteDefaults, ...(rewrite ?? {}) };
-  configSnapshot = {
-    ...configSnapshot,
+  store.config = {
+    ...store.config,
     rewrite: config,
   };
   rewriteEnabled.checked = Boolean(config.enabled);
@@ -308,7 +331,7 @@ function applyRewriteConfig(rewrite) {
     config.model ?? providerDefaults[currentRewriteProvider()]?.model ?? "";
   rewriteTimeout.value = String(config.timeout_ms ?? rewriteDefaults.timeout_ms);
   rewriteApiKey.value = "";
-  rewriteVariants = {};
+  store.rewriteVariants = {};
   updateRewriteSummary();
 }
 
@@ -339,7 +362,7 @@ function updateRewriteSummary() {
   rewriteProviderSummary.textContent = provider;
   rewriteProfileSummary.textContent = profile;
   rewriteKeySummary.textContent = meta.env;
-  rewriteKeyStatus.textContent = rewriteKeySaved
+  rewriteKeyStatus.textContent = store.rewriteKeySaved
     ? `${provider} key 已保存`
     : `未保存，将回退到 ${meta.env}`;
   rewriteChip.textContent = rewriteEnabled.checked ? `改写 ${profile}` : "改写关闭";
@@ -350,7 +373,7 @@ function updateRewriteSummary() {
 async function refreshRewriteKeyStatus() {
   const provider = currentRewriteProvider();
   if (!invoke) {
-    rewriteKeySaved = false;
+    store.rewriteKeySaved = false;
     updateRewriteSummary();
     return;
   }
@@ -359,10 +382,11 @@ async function refreshRewriteKeyStatus() {
     const status = await invoke("get_rewrite_key_status", {
       request: { provider },
     });
-    rewriteKeySaved = Boolean(status?.saved);
+    store.rewriteKeySaved = Boolean(status?.saved);
   } catch (error) {
-    rewriteKeySaved = false;
-    settingsMessage.textContent = String(error);
+    store.rewriteKeySaved = false;
+    store.settingsMessage = String(error);
+    renderSettingsView();
   }
   updateRewriteSummary();
 }
@@ -380,11 +404,11 @@ async function saveRewriteKeyIfNeeded() {
     },
   });
   rewriteApiKey.value = "";
-  rewriteKeySaved = Boolean(status?.saved);
+  store.rewriteKeySaved = Boolean(status?.saved);
 }
 
 function switchSettingsTab(tab) {
-  activeSettingsTab = tab;
+  store.settingsTab = tab;
   settingsTabs.forEach((button) => {
     const active = button.dataset.settingsTab === tab;
     button.classList.toggle("is-active", active);
@@ -404,9 +428,9 @@ function switchMode(mode) {
   }
 
   if (mode !== "settings") {
-    previousContentMode = mode;
+    store.previousContentMode = mode;
   }
-  activeMode = mode;
+  store.mode = mode;
   void applyWindowMode(mode);
   modeTabs.forEach((button) => {
     const active = button.dataset.modeTab === mode;
@@ -416,7 +440,7 @@ function switchMode(mode) {
   modePanes.forEach((pane) => {
     pane.hidden = pane.dataset.modePane !== mode;
   });
-  if (mode === "settings" && activeSettingsTab === "diagnostics") {
+  if (mode === "settings" && store.settingsTab === "diagnostics") {
     refreshDiagnosticsPanel();
   }
 }
@@ -425,19 +449,19 @@ function contextMenuItemsForActiveMode() {
   const items = [];
   const hasVoicePad = Boolean(document.querySelector('[data-mode-pane="voice-pad"]'));
 
-  if (activeMode !== "floating") {
+  if (store.mode !== "floating") {
     items.push({
       label: "切换到悬浮窗模式",
       mode: "floating",
     });
   }
-  if (hasVoicePad && activeMode !== "voice-pad") {
+  if (hasVoicePad && store.mode !== "voice-pad") {
     items.push({
       label: "切换到文稿模式",
       mode: "voice-pad",
     });
   }
-  if (activeMode !== "settings") {
+  if (store.mode !== "settings") {
     items.push({
       label: "打开设置",
       mode: "settings",
@@ -494,7 +518,8 @@ async function applyWindowMode(mode) {
     await appWindow.setFocusable(mode !== "floating");
     await appWindow.setSize(new LogicalSize(size.width, size.height));
   } catch (error) {
-    settingsMessage.textContent = String(error);
+    store.settingsMessage = String(error);
+    renderSettingsView();
   }
 }
 
@@ -526,40 +551,42 @@ async function refreshDiagnosticsPanel() {
       ? `${diagnostics.rewrite_provider} 已保存`
       : `${diagnostics.rewrite_provider} 未保存`;
   } catch (error) {
-    settingsMessage.textContent = String(error);
+    store.settingsMessage = String(error);
+    renderSettingsView();
   }
 }
 
 function switchVariantTab(variant) {
-  activeVariant = variant;
+  store.activeVariant = variant;
   variantTabs.forEach((button) => {
     button.classList.toggle("is-active", button.dataset.variantTab === variant);
   });
-  variantText.textContent = rewriteVariants[variant] ?? "";
+  variantText.textContent = store.rewriteVariants[variant] ?? "";
 }
 
 function updateVariantPanel() {
   const show =
     rewriteEnabled.checked &&
     rewriteProfile.value === "multi" &&
-    Object.keys(rewriteVariants).length > 1;
+    Object.keys(store.rewriteVariants).length > 1;
   variantPanel.hidden = !show;
   copyVariant.disabled = !show;
   pasteVariant.disabled = !show;
   if (show) {
-    switchVariantTab(activeVariant);
+    switchVariantTab(store.activeVariant);
   } else {
     variantActionStatus.textContent = "";
   }
 }
 
 async function boot() {
-  void applyWindowMode(activeMode);
+  void applyWindowMode(store.mode);
   applyState({ state: "idle" });
 
   if (!invoke || !listen) {
     applyConfig(configDefaults);
-    settingsMessage.textContent = "预览模式";
+    store.settingsMessage = "预览模式";
+    renderSettingsView();
     return;
   }
 
@@ -573,26 +600,27 @@ async function boot() {
   await listen("paste-failure", (event) => {
     const payload = event.payload;
     if (payload?.text) {
-      lastTranscript.textContent = payload.text;
+      store.documentText = payload.text;
     }
-    runtimeError.hidden = false;
-    runtimeErrorText.textContent = `文本已生成，但自动粘贴失败：${payload?.error ?? ""}`;
+    store.runtimeError = `文本已生成，但自动粘贴失败：${payload?.error ?? ""}`;
+    renderRuntimeViews();
   });
 
   applyConfig(await invoke("get_config"));
   applyRewriteConfig(await invoke("get_rewrite_config"));
   applyPauseState(await invoke("get_pause_state"));
   await refreshRewriteKeyStatus();
-  settingsMessage.textContent = "运行中";
+  store.settingsMessage = "运行中";
+  renderSettingsView();
   await invoke("start_runtime");
 }
 
 settingsToggle.addEventListener("click", () => {
-  switchMode(activeMode === "settings" ? previousContentMode : "settings");
+  switchMode(store.mode === "settings" ? store.previousContentMode : "settings");
 });
 
 floatingSettings?.addEventListener("click", () => switchMode("settings"));
-settingsClose.addEventListener("click", () => switchMode(previousContentMode));
+settingsClose.addEventListener("click", () => switchMode(store.previousContentMode));
 
 modeTabs.forEach((button) => {
   button.addEventListener("click", () => switchMode(button.dataset.modeTab));
@@ -603,10 +631,11 @@ pauseToggle.addEventListener("click", togglePauseState);
 micButton.addEventListener("click", toggleManualRecording);
 
 async function togglePauseState() {
-  const next = !paused;
+  const next = !store.paused;
   applyPauseState({ paused: next });
   if (!invoke) {
-    settingsMessage.textContent = "预览模式";
+    store.settingsMessage = "预览模式";
+    renderSettingsView();
     return;
   }
   try {
@@ -614,17 +643,19 @@ async function togglePauseState() {
     applyPauseState(state);
   } catch (error) {
     applyPauseState({ paused: !next });
-    settingsMessage.textContent = String(error);
+    store.settingsMessage = String(error);
+    renderSettingsView();
   }
 }
 
 async function toggleManualRecording() {
-  if (paused) {
-    settingsMessage.textContent = "监听已暂停";
+  if (store.paused) {
+    store.settingsMessage = "监听已暂停";
+    renderSettingsView();
     return;
   }
 
-  if (manualRecording) {
+  if (store.manualRecording) {
     await endManualRecording();
   } else {
     await beginManualRecording();
@@ -635,7 +666,8 @@ async function beginManualRecording() {
   if (!invoke) {
     setManualRecording(true);
     applyState({ state: "recording" });
-    settingsMessage.textContent = "预览模式";
+    store.settingsMessage = "预览模式";
+    renderSettingsView();
     return;
   }
 
@@ -644,7 +676,8 @@ async function beginManualRecording() {
     setManualRecording(true);
   } catch (error) {
     setManualRecording(false);
-    settingsMessage.textContent = String(error);
+    store.settingsMessage = String(error);
+    renderSettingsView();
   }
 }
 
@@ -652,7 +685,8 @@ async function endManualRecording() {
   if (!invoke) {
     setManualRecording(false);
     applyState({ state: "idle" });
-    settingsMessage.textContent = "预览模式";
+    store.settingsMessage = "预览模式";
+    renderSettingsView();
     return;
   }
 
@@ -660,7 +694,8 @@ async function endManualRecording() {
     await invoke("end_manual_recording");
     setManualRecording(false);
   } catch (error) {
-    settingsMessage.textContent = String(error);
+    store.settingsMessage = String(error);
+    renderSettingsView();
   }
 }
 
@@ -682,7 +717,7 @@ pasteVariant.addEventListener("click", async () => {
 });
 
 async function writeSelectedVariant(command, pendingLabel, doneLabel) {
-  const text = rewriteVariants[activeVariant] ?? "";
+  const text = store.rewriteVariants[store.activeVariant] ?? "";
   if (!text.trim()) {
     variantActionStatus.textContent = "当前版本为空";
     return;
@@ -711,13 +746,15 @@ document.querySelectorAll('input[name="settings-rewrite-provider"]').forEach((in
 });
 
 clearRewriteKey.addEventListener("click", async () => {
-  settingsMessage.textContent = "清除中...";
+  store.settingsMessage = "清除中...";
+  renderSettingsView();
   try {
     if (!invoke) {
       rewriteApiKey.value = "";
-      rewriteKeySaved = false;
+      store.rewriteKeySaved = false;
       updateRewriteSummary();
-      settingsMessage.textContent = "预览模式";
+      store.settingsMessage = "预览模式";
+      renderSettingsView();
       return;
     }
 
@@ -725,21 +762,25 @@ clearRewriteKey.addEventListener("click", async () => {
       request: { provider: currentRewriteProvider() },
     });
     rewriteApiKey.value = "";
-    rewriteKeySaved = Boolean(status?.saved);
+    store.rewriteKeySaved = Boolean(status?.saved);
     updateRewriteSummary();
-    settingsMessage.textContent = "API key 已清除";
+    store.settingsMessage = "API key 已清除";
+    renderSettingsView();
   } catch (error) {
-    settingsMessage.textContent = String(error);
+    store.settingsMessage = String(error);
+    renderSettingsView();
   }
 });
 
 saveSettings.addEventListener("click", async () => {
-  if (activeSettingsTab === "rewrite") {
-    settingsMessage.textContent = "保存中...";
+  if (store.settingsTab === "rewrite") {
+    store.settingsMessage = "保存中...";
+    renderSettingsView();
     try {
       if (!invoke) {
         applyRewriteConfig(readRewriteConfig());
-        settingsMessage.textContent = "预览模式";
+        store.settingsMessage = "预览模式";
+        renderSettingsView();
         return;
       }
 
@@ -749,32 +790,39 @@ saveSettings.addEventListener("click", async () => {
       await saveRewriteKeyIfNeeded();
       applyRewriteConfig(rewrite);
       await refreshRewriteKeyStatus();
-      settingsMessage.textContent = "改写设置已保存";
+      store.settingsMessage = "改写设置已保存";
+      renderSettingsView();
     } catch (error) {
-      settingsMessage.textContent = String(error);
+      store.settingsMessage = String(error);
+      renderSettingsView();
     }
     return;
   }
 
-  settingsMessage.textContent = "保存中...";
+  store.settingsMessage = "保存中...";
+  renderSettingsView();
   try {
     const hotkeyError = validateHotkeyForm();
     if (hotkeyError) {
-      settingsMessage.textContent = hotkeyError;
+      store.settingsMessage = hotkeyError;
+      renderSettingsView();
       return;
     }
 
     if (!invoke) {
       applyConfig(readConfig());
-      settingsMessage.textContent = "预览模式";
+      store.settingsMessage = "预览模式";
+      renderSettingsView();
       return;
     }
 
     const config = await invoke("save_config", { config: readConfig() });
     applyConfig(config);
-    settingsMessage.textContent = "已保存并重新加载";
+    store.settingsMessage = "已保存并重新加载";
+    renderSettingsView();
   } catch (error) {
-    settingsMessage.textContent = String(error);
+    store.settingsMessage = String(error);
+    renderSettingsView();
   }
 });
 
