@@ -163,6 +163,33 @@ h1 {
   -webkit-line-clamp: 3;
 }
 
+.result-meta {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+  margin-top: 8px;
+}
+
+.result-meta[hidden] {
+  display: none;
+}
+
+#fallback-reason,
+#latency-summary {
+  overflow: hidden;
+  color: #596579;
+  font-size: 11px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#fallback-reason[data-active="true"] {
+  color: #9a3412;
+}
+
 .variant-panel {
   display: grid;
   gap: 6px;

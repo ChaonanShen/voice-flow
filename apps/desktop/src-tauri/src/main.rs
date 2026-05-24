@@ -6,7 +6,7 @@ use std::sync::{
     Arc, Mutex,
 };
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use keyring::{Entry, Error as KeyringError};
@@ -24,7 +24,7 @@ use voice_core::paste::{PasteSimulator, SystemPaste};
 use voice_core::push_to_talk::{PushToTalkRecorder, PushToTalkRecorderEvent};
 use voice_core::state::{RealtimeState, RealtimeStateEvent};
 use voice_core::text_pipeline::rewrite_settings_from_config;
-use voice_rewrite::{RewriteError, RewriteProvider, RewriteResult};
+use voice_rewrite::{RewriteError, RewriteProvider, RewriteResult, RewriteTrace};
 
 const SAMPLE_RATE: u32 = 16_000;
 const CHANNELS: u16 = 1;
@@ -57,6 +57,15 @@ struct RewriteResultEvent {
     variants: HashMap<String, String>,
     fallback: bool,
     error: Option<String>,
+    trace: RewriteTrace,
+    timings: TimingEvent,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct TimingEvent {
+    asr_ms: u128,
+    rewrite_ms: Option<u128>,
+    paste_ms: Option<u128>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -305,15 +314,37 @@ fn run_runtime_session(app: &AppHandle, runtime: &RuntimeHandle, config: AppConf
                 }
                 Some(PushToTalkRecorderEvent::RecordingStopped(audio)) => {
                     emit_state(app, RealtimeStateEvent::new(RealtimeState::Transcribing));
+                    let asr_started = Instant::now();
                     let transcript = engine
                         .transcribe(&audio.samples, audio.format)
                         .context("failed to transcribe recording")?;
-                    let text = maybe_rewrite_transcript(app, &config.rewrite, &transcript)
+                    let asr_ms = asr_started.elapsed().as_millis();
+                    let rewrite_started = Instant::now();
+                    let rewrite = maybe_rewrite_transcript(app, &config.rewrite, &transcript)
                         .context("failed to rewrite transcript")?;
-                    paste_transcript(&text).context("failed to paste transcript")?;
+                    let rewrite_ms = if config.rewrite.enabled {
+                        Some(rewrite_started.elapsed().as_millis())
+                    } else {
+                        None
+                    };
+                    let paste_started = Instant::now();
+                    paste_transcript(&rewrite.text).context("failed to paste transcript")?;
+                    let paste_ms = paste_started.elapsed().as_millis();
+                    if let Some(result) = &rewrite.result {
+                        emit_rewrite_result(
+                            app,
+                            result,
+                            TimingEvent {
+                                asr_ms,
+                                rewrite_ms,
+                                paste_ms: Some(paste_ms),
+                            },
+                        );
+                    }
                     emit_state(
                         app,
-                        RealtimeStateEvent::new(RealtimeState::Completed).with_transcript(text),
+                        RealtimeStateEvent::new(RealtimeState::Completed)
+                            .with_transcript(rewrite.text),
                     );
                     emit_state(app, RealtimeStateEvent::new(RealtimeState::Idle));
                 }
@@ -382,9 +413,12 @@ fn maybe_rewrite_transcript(
     app: &AppHandle,
     rewrite: &RewriteConfig,
     transcript: &str,
-) -> Result<String> {
+) -> Result<DesktopRewriteOutput> {
     if !rewrite.enabled {
-        return Ok(transcript.to_string());
+        return Ok(DesktopRewriteOutput {
+            text: transcript.to_string(),
+            result: None,
+        });
     }
 
     emit_state(app, RealtimeStateEvent::new(RealtimeState::Rewriting));
@@ -409,8 +443,15 @@ fn maybe_rewrite_transcript(
         }
     }
 
-    emit_rewrite_result(app, &result);
-    Ok(result.main)
+    Ok(DesktopRewriteOutput {
+        text: result.main.clone(),
+        result: Some(result),
+    })
+}
+
+struct DesktopRewriteOutput {
+    text: String,
+    result: Option<RewriteResult>,
 }
 
 fn rewrite_key_status(provider: RewriteProvider) -> Result<RewriteKeyStatus> {
@@ -458,7 +499,7 @@ fn emit_state(app: &AppHandle, event: RealtimeStateEvent) {
     let _ = app.emit("realtime-state", event);
 }
 
-fn emit_rewrite_result(app: &AppHandle, result: &RewriteResult) {
+fn emit_rewrite_result(app: &AppHandle, result: &RewriteResult, timings: TimingEvent) {
     let _ = app.emit(
         "rewrite-result",
         RewriteResultEvent {
@@ -467,6 +508,8 @@ fn emit_rewrite_result(app: &AppHandle, result: &RewriteResult) {
             variants: result.variants.clone(),
             fallback: result.trace.fallback,
             error: result.trace.error.clone(),
+            trace: result.trace.clone(),
+            timings,
         },
     );
 }

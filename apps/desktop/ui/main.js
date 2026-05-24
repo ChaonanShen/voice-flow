@@ -47,6 +47,9 @@ const dot = document.querySelector(".status-dot");
 const stateLabel = document.querySelector("#state-label");
 const lastTranscript = document.querySelector("#last-transcript");
 const rewriteChip = document.querySelector("#rewrite-chip");
+const resultMeta = document.querySelector("#result-meta");
+const fallbackReason = document.querySelector("#fallback-reason");
+const latencySummary = document.querySelector("#latency-summary");
 const variantPanel = document.querySelector("#variant-panel");
 const variantText = document.querySelector("#variant-text");
 const variantTabs = document.querySelectorAll("[data-variant-tab]");
@@ -127,7 +130,28 @@ function applyRewriteResult(result) {
   if (result?.fallback && result.error) {
     settingsMessage.textContent = result.error;
   }
+  updateResultMeta(result);
   updateVariantPanel();
+}
+
+function updateResultMeta(result) {
+  const timings = result?.timings ?? {};
+  const parts = [];
+  if (Number.isFinite(Number(timings.asr_ms))) {
+    parts.push(`ASR ${timings.asr_ms}ms`);
+  }
+  if (Number.isFinite(Number(timings.rewrite_ms))) {
+    parts.push(`rewrite ${timings.rewrite_ms}ms`);
+  }
+  if (Number.isFinite(Number(timings.paste_ms))) {
+    parts.push(`paste ${timings.paste_ms}ms`);
+  }
+
+  const reason = result?.fallback ? result?.error ?? "rewrite fallback" : "";
+  fallbackReason.textContent = reason ? `fallback: ${reason}` : "";
+  fallbackReason.dataset.active = String(Boolean(reason));
+  latencySummary.textContent = parts.join(" / ");
+  resultMeta.hidden = !reason && parts.length === 0;
 }
 
 function normalizeConfig(config) {
