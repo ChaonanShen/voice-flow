@@ -8,7 +8,7 @@ use crate::error::RewriteError;
 use crate::llm::{ChatRequest, LlmClient, ResponseFormat};
 use crate::preprocess::{Preprocessor, UserDictionary};
 use crate::profile::Profile;
-use crate::prompts::CLEAN_SYSTEM_PROMPT;
+use crate::prompts::system_prompt;
 use crate::trace::RewriteTrace;
 
 #[async_trait]
@@ -111,25 +111,27 @@ where
             });
         }
 
-        let result = match ctx.default_profile {
-            Profile::Off => unreachable!("off handled above"),
-            Profile::Clean => {
-                trace.mark_llm_called();
-                let llm_started = Instant::now();
-                let response = self
-                    .llm
-                    .complete(ChatRequest {
-                        model: ctx.model,
-                        system: CLEAN_SYSTEM_PROMPT.to_string(),
-                        user: preprocessed.cleaned_text.clone(),
-                        response_format: ResponseFormat::Text,
-                        timeout: ctx.timeout,
-                    })
-                    .await;
-                trace.set_llm_duration(llm_started.elapsed());
-                response
-            }
+        let Some(system) = system_prompt(ctx.default_profile) else {
+            return Ok(RewriteResult {
+                main: preprocessed.cleaned_text,
+                variants: std::collections::HashMap::new(),
+                trace,
+            });
         };
+
+        trace.mark_llm_called();
+        let llm_started = Instant::now();
+        let result = self
+            .llm
+            .complete(ChatRequest {
+                model: ctx.model,
+                system: system.to_string(),
+                user: preprocessed.cleaned_text.clone(),
+                response_format: ResponseFormat::Text,
+                timeout: ctx.timeout,
+            })
+            .await;
+        trace.set_llm_duration(llm_started.elapsed());
 
         match result {
             Ok(response) => {
@@ -166,6 +168,15 @@ mod tests {
     use crate::llm::mock::MockLlmClient;
     use crate::llm::LlmError;
 
+    fn context(profile: Profile) -> RewriteContext {
+        RewriteContext {
+            default_profile: profile,
+            user_dictionary: Arc::new(UserDictionary::default()),
+            model: "deepseek-chat".to_string(),
+            timeout: Duration::from_secs(4),
+        }
+    }
+
     #[tokio::test]
     async fn off_profile_does_not_call_llm() {
         let mock = MockLlmClient::ok("should not be used");
@@ -185,10 +196,7 @@ mod tests {
         let mock = MockLlmClient::ok("我今天下午会晚到十分钟。");
         let pipeline = LlmRewritePipeline::new(mock.clone());
         let result = pipeline
-            .process(
-                "嗯我今天下午会晚到十分钟",
-                RewriteContext::clean("deepseek-chat", Duration::from_secs(4)),
-            )
+            .process("嗯我今天下午会晚到十分钟", context(Profile::Clean))
             .await
             .unwrap();
 
@@ -196,6 +204,66 @@ mod tests {
         assert_eq!(mock.call_count(), 1);
         assert!(result.trace.llm_called);
         assert!(!result.trace.fallback);
+    }
+
+    #[tokio::test]
+    async fn text_profiles_send_profile_specific_prompts() {
+        let cases = [
+            (
+                Profile::Polish,
+                "我今天下午可能因地铁晚点而晚到十分钟，请老师不必等我。",
+                "润色",
+            ),
+            (
+                Profile::Email,
+                "老师您好：\n\n今天下午我可能因为地铁晚点会晚到十分钟，请您不必等我。\n\n谢谢老师。",
+                "邮件",
+            ),
+            (
+                Profile::Wechat,
+                "老师，今天下午地铁可能晚点，我会晚到十分钟，您不用等我。",
+                "微信",
+            ),
+            (
+                Profile::Bullets,
+                "- 今天下午可能晚到十分钟\n- 原因是地铁晚点\n- 请老师不要等我",
+                "要点",
+            ),
+            (
+                Profile::Commit,
+                "feat(rewrite): add clean profile rewrite pipeline",
+                "Conventional Commit",
+            ),
+            (
+                Profile::Prompt,
+                "目标：实现一个语音输入改写管道。\n约束：保持 ASR 与 rewrite 解耦，并补充 mock 测试。\n输出：可运行的 Rust 代码和测试。",
+                "AI prompt",
+            ),
+        ];
+
+        for (profile, expected, prompt_marker) in cases {
+            let mock = MockLlmClient::ok(expected);
+            let pipeline = LlmRewritePipeline::new(mock.clone());
+            let result = pipeline
+                .process(
+                    "嗯我今天下午可能因为地铁晚点会晚到十分钟，让老师不要等我",
+                    context(profile),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(result.main, expected, "profile={}", profile.label());
+            assert!(result.trace.llm_called);
+            let calls = mock.calls();
+            assert_eq!(calls.len(), 1);
+            assert!(
+                calls[0].system.contains(prompt_marker),
+                "profile={} system prompt should contain `{}`: {}",
+                profile.label(),
+                prompt_marker,
+                calls[0].system
+            );
+        }
     }
 
     #[tokio::test]
