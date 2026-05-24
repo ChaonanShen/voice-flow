@@ -50,17 +50,73 @@
           </button>
         </section>
 
-        <section class="document-transcript" aria-label="最近一次识别文本">
-          <div class="document-transcript-meta">
-            <p class="label">最近文本</p>
-            <span id="document-rewrite-chip">改写关闭</span>
-          </div>
-          <p id="document-last-text">尚无识别结果</p>
+        <section class="document-main" aria-label="文稿工作区">
+          <section class="document-card document-card-transcript" aria-label="最近一次识别文本">
+            <div class="document-transcript-meta">
+              <p class="label">最近转写</p>
+              <div class="document-chip-row">
+                <span id="document-output-chip">输出到文稿</span>
+                <span id="document-rewrite-chip">改写关闭</span>
+              </div>
+            </div>
+            <p id="document-last-text">尚无识别结果</p>
 
-          <div class="document-result-meta" id="document-result-meta" hidden>
-            <span id="document-fallback-reason"></span>
-            <span id="document-latency-summary"></span>
-          </div>
+            <div class="document-result-meta" id="document-result-meta" hidden>
+              <span id="document-fallback-reason"></span>
+              <span id="document-latency-summary"></span>
+            </div>
+          </section>
+
+          <section class="document-card document-card-diff" aria-label="原始转写与最终输出差异">
+            <div class="document-diff-header">
+              <p class="label">转写与输出</p>
+              <span id="document-profile-chip">off</span>
+            </div>
+            <div class="document-diff-grid">
+              <article class="document-diff-block">
+                <p class="document-diff-label">原始转写</p>
+                <div id="document-diff-raw" class="document-diff-content">尚无转写结果</div>
+              </article>
+              <article class="document-diff-block">
+                <p class="document-diff-label">最终输出</p>
+                <div id="document-diff-final" class="document-diff-content">尚无输出结果</div>
+              </article>
+            </div>
+          </section>
+
+          <section class="document-card document-card-editor" aria-label="文稿编辑区">
+            <div class="document-editor-header">
+              <div>
+                <p class="label">文稿编辑区</p>
+                <p id="document-editor-mode-hint" class="document-editor-hint">新结果将插入到当前光标位置</p>
+              </div>
+              <div class="document-editor-actions">
+                <button class="document-editor-mode is-active" type="button" data-document-apply-mode="insert">
+                  插入光标
+                </button>
+                <button class="document-editor-mode" type="button" data-document-apply-mode="replace">
+                  替换全文
+                </button>
+                <button class="document-editor-mode" type="button" data-document-apply-mode="append">
+                  追加末尾
+                </button>
+              </div>
+            </div>
+
+            <textarea
+              id="document-editor"
+              class="document-editor"
+              spellcheck="false"
+              placeholder="文稿模式下，语音结果会写入这里。你也可以手动编辑。"
+            ></textarea>
+
+            <div class="document-editor-toolbar">
+              <button id="document-copy-final" type="button">复制最终输出</button>
+              <button id="document-copy-editor" type="button">复制全文稿</button>
+              <button id="document-clear-editor" type="button">清空文稿</button>
+              <span id="document-editor-status"></span>
+            </div>
+          </section>
 
           <div class="document-variant-panel" id="document-variant-panel" hidden aria-label="改写候选">
             <div class="document-variant-tabs" role="tablist" aria-label="改写版本">
@@ -79,7 +135,7 @@
             </div>
             <div class="document-variant-actions">
               <button id="document-copy-variant" type="button">复制选中版本</button>
-              <button id="document-paste-variant" type="button">粘贴选中版本</button>
+              <button id="document-paste-variant" type="button">写入文稿</button>
               <span id="document-variant-action-status"></span>
             </div>
             <p id="document-variant-text"></p>

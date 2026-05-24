@@ -47,9 +47,20 @@ const dot = document.querySelector("#document-status-dot");
 const stateLabel = document.querySelector("#document-state-label");
 const lastTranscript = document.querySelector("#document-last-text");
 const rewriteChip = document.querySelector("#document-rewrite-chip");
+const outputChip = document.querySelector("#document-output-chip");
+const profileChip = document.querySelector("#document-profile-chip");
 const resultMeta = document.querySelector("#document-result-meta");
 const fallbackReason = document.querySelector("#document-fallback-reason");
 const latencySummary = document.querySelector("#document-latency-summary");
+const diffRaw = document.querySelector("#document-diff-raw");
+const diffFinal = document.querySelector("#document-diff-final");
+const documentEditor = document.querySelector("#document-editor");
+const documentEditorStatus = document.querySelector("#document-editor-status");
+const documentEditorModeHint = document.querySelector("#document-editor-mode-hint");
+const documentApplyModeButtons = document.querySelectorAll("[data-document-apply-mode]");
+const copyFinal = document.querySelector("#document-copy-final");
+const copyEditor = document.querySelector("#document-copy-editor");
+const clearEditor = document.querySelector("#document-clear-editor");
 const variantPanel = document.querySelector("#document-variant-panel");
 const variantText = document.querySelector("#document-variant-text");
 const variantTabs = document.querySelectorAll(".document-variant-tab");
@@ -115,14 +126,21 @@ const store = {
   paused: false,
   mode: "floating",
   previousContentMode: "floating",
+  outputMode: "floating_input",
   currentState: "idle",
   manualRecording: false,
   documentText: "",
+  rawTranscript: "",
+  finalText: "",
+  documentEditorText: "",
+  documentApplyMode: "insert",
+  resultProfile: "off",
   runtimeError: "",
   resultMeta: {
     fallbackReason: "",
     latencySummary: "",
   },
+  editorStatus: "",
   settingsMessage: "",
 };
 let activeContextMenu = null;
@@ -145,11 +163,24 @@ function renderDocumentMode() {
     ? "已暂停"
     : labels[store.currentState] ?? labels.idle;
   lastTranscript.textContent = store.documentText || "尚无识别结果";
+  diffRaw.textContent = store.rawTranscript || "尚无转写结果";
+  diffFinal.textContent = store.finalText || "尚无输出结果";
+  outputChip.textContent =
+    store.outputMode === "voice_pad" ? "输出到文稿" : "输出到外部应用";
+  outputChip.dataset.mode = store.outputMode;
+  profileChip.textContent = store.resultProfile;
   runtimeError.hidden = !store.runtimeError;
   runtimeErrorText.textContent = store.runtimeError;
   pauseToggle.dataset.active = String(store.paused);
   pauseToggle.title = store.paused ? "恢复监听" : "暂停监听";
   pauseToggle.querySelector("span").textContent = store.paused ? ">" : "||";
+  documentEditor.value = store.documentEditorText;
+  documentEditorStatus.textContent = store.editorStatus ?? "";
+  documentApplyModeButtons.forEach((button) => {
+    const active = button.dataset.documentApplyMode === store.documentApplyMode;
+    button.classList.toggle("is-active", active);
+  });
+  documentEditorModeHint.textContent = documentApplyModeHint(store.documentApplyMode);
 }
 
 function renderSettingsView() {
@@ -230,11 +261,47 @@ function applyRewriteResult(result) {
   variantActionStatus.textContent = "";
   if (store.rewriteVariants.clean) {
     store.documentText = store.rewriteVariants.clean;
+    store.finalText = store.rewriteVariants.clean;
   }
+  store.resultProfile = result?.profile ?? store.resultProfile;
   if (result?.fallback && result.error) {
     store.settingsMessage = result.error;
   }
   updateResultMeta(result);
+  updateVariantPanel();
+  renderRuntimeViews();
+}
+
+function applyDesktopOutputResult(result) {
+  if (!result) {
+    return;
+  }
+
+  store.outputMode = result.output_mode ?? store.outputMode;
+  store.rawTranscript = result.raw_transcript ?? "";
+  store.finalText = result.final_text ?? "";
+  store.documentText = store.finalText || store.rawTranscript;
+  store.resultProfile = result.profile ?? "off";
+  store.rewriteVariants = {
+    clean: result.final_text ?? "",
+    ...(result.variants ?? {}),
+  };
+  store.activeVariant = store.rewriteVariants[store.activeVariant]
+    ? store.activeVariant
+    : "clean";
+  updateResultMeta({
+    fallback: result.fallback,
+    error: result.error,
+    timings: result.timings,
+  });
+  if (result.output_mode === "voice_pad" && result.final_text) {
+    applyTextToDocumentEditor(result.final_text);
+  }
+  if (result.output_mode === "floating_input") {
+    store.editorStatus = result.pasted_to_external
+      ? "已输出到外部应用"
+      : "未写入外部应用";
+  }
   updateVariantPanel();
   renderRuntimeViews();
 }
@@ -382,6 +449,41 @@ function updateRewriteSummary() {
   updateVariantPanel();
 }
 
+function documentApplyModeHint(mode) {
+  switch (mode) {
+    case "replace":
+      return "新结果会替换当前全文稿";
+    case "append":
+      return "新结果会追加到文稿末尾";
+    default:
+      return "新结果将插入到当前光标位置";
+  }
+}
+
+function applyTextToDocumentEditor(text) {
+  const current = store.documentEditorText ?? "";
+  switch (store.documentApplyMode) {
+    case "replace":
+      store.documentEditorText = text;
+      store.editorStatus = "已替换全文稿";
+      break;
+    case "append":
+      store.documentEditorText = current ? `${current}\n${text}` : text;
+      store.editorStatus = "已追加到文稿末尾";
+      break;
+    default:
+      store.documentEditorText = insertAtSelection(current, text);
+      store.editorStatus = "已插入到当前光标位置";
+      break;
+  }
+}
+
+function insertAtSelection(current, text) {
+  const start = documentEditor.selectionStart ?? current.length;
+  const end = documentEditor.selectionEnd ?? current.length;
+  return `${current.slice(0, start)}${text}${current.slice(end)}`;
+}
+
 async function refreshRewriteKeyStatus() {
   const provider = currentRewriteProvider();
   if (!invoke) {
@@ -446,6 +548,7 @@ function setMode(mode) {
   renderModeVisibility();
   renderRuntimeViews();
   void applyWindowChrome(mode);
+  void syncOutputMode(mode);
   if (mode === "settings" && store.settingsTab === "diagnostics") {
     refreshDiagnosticsPanel();
   }
@@ -537,6 +640,27 @@ async function applyWindowChrome(mode) {
   }
 }
 
+async function syncOutputMode(mode) {
+  if (!contentModes.has(mode)) {
+    return;
+  }
+
+  const next = mode === "voice-pad" ? "voice_pad" : "floating_input";
+  store.outputMode = next;
+  renderRuntimeViews();
+  if (!invoke) {
+    return;
+  }
+
+  try {
+    store.outputMode = await invoke("set_output_mode", { outputMode: next });
+    renderRuntimeViews();
+  } catch (error) {
+    store.settingsMessage = String(error);
+    renderSettingsView();
+  }
+}
+
 async function refreshDiagnosticsPanel() {
   if (!invoke) {
     diagConfigPath.textContent = "预览模式";
@@ -564,6 +688,8 @@ async function refreshDiagnosticsPanel() {
     diagRewriteKey.textContent = diagnostics.rewrite_key_saved
       ? `${diagnostics.rewrite_provider} 已保存`
       : `${diagnostics.rewrite_provider} 未保存`;
+    outputChip.textContent =
+      diagnostics.output_mode === "voice_pad" ? "输出到文稿" : "输出到外部应用";
   } catch (error) {
     store.settingsMessage = String(error);
     renderSettingsView();
@@ -608,6 +734,11 @@ async function boot() {
   await listen("realtime-state", (event) => applyState(event.payload));
   await listen("pause-state", (event) => applyPauseState(event.payload));
   await listen("rewrite-result", (event) => applyRewriteResult(event.payload));
+  await listen("desktop-output-result", (event) => applyDesktopOutputResult(event.payload));
+  await listen("output-mode-updated", (event) => {
+    store.outputMode = event.payload ?? "floating_input";
+    renderRuntimeViews();
+  });
   await listen("runtime-error", (event) => {
     const payload = event.payload;
     applyState({ state: "error", error: payload?.error ?? "运行时错误" });
@@ -624,6 +755,13 @@ async function boot() {
   applyConfig(await invoke("get_config"));
   applyRewriteConfig(await invoke("get_rewrite_config"));
   applyPauseState(await invoke("get_pause_state"));
+  store.outputMode = await invoke("get_output_mode");
+  if (store.outputMode === "voice_pad") {
+    store.mode = "voice-pad";
+    store.previousContentMode = "voice-pad";
+    renderModeVisibility();
+    void applyWindowChrome("voice-pad");
+  }
   await refreshRewriteKeyStatus();
   store.settingsMessage = "运行中";
   renderSettingsView();
@@ -744,6 +882,12 @@ async function writeSelectedVariant(command, pendingLabel, doneLabel) {
 
   variantActionStatus.textContent = pendingLabel;
   try {
+    if (command === "paste_text") {
+      applyTextToDocumentEditor(text);
+      variantActionStatus.textContent = doneLabel;
+      renderRuntimeViews();
+      return;
+    }
     if (!invoke) {
       await navigator.clipboard.writeText(text);
     } else {
@@ -754,6 +898,58 @@ async function writeSelectedVariant(command, pendingLabel, doneLabel) {
     variantActionStatus.textContent = String(error);
   }
 }
+documentEditor.addEventListener("input", () => {
+  store.documentEditorText = documentEditor.value;
+});
+documentApplyModeButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    store.documentApplyMode = button.dataset.documentApplyMode;
+    renderRuntimeViews();
+  });
+});
+copyFinal.addEventListener("click", async () => {
+  if (!store.finalText.trim()) {
+    store.editorStatus = "当前没有最终输出";
+    renderRuntimeViews();
+    return;
+  }
+  try {
+    if (!invoke) {
+      await navigator.clipboard.writeText(store.finalText);
+    } else {
+      await invoke("copy_text", { text: store.finalText });
+    }
+    store.editorStatus = "已复制最终输出";
+    renderRuntimeViews();
+  } catch (error) {
+    store.editorStatus = String(error);
+    renderRuntimeViews();
+  }
+});
+copyEditor.addEventListener("click", async () => {
+  if (!store.documentEditorText.trim()) {
+    store.editorStatus = "文稿为空";
+    renderRuntimeViews();
+    return;
+  }
+  try {
+    if (!invoke) {
+      await navigator.clipboard.writeText(store.documentEditorText);
+    } else {
+      await invoke("copy_text", { text: store.documentEditorText });
+    }
+    store.editorStatus = "已复制全文稿";
+    renderRuntimeViews();
+  } catch (error) {
+    store.editorStatus = String(error);
+    renderRuntimeViews();
+  }
+});
+clearEditor.addEventListener("click", () => {
+  store.documentEditorText = "";
+  store.editorStatus = "已清空文稿";
+  renderRuntimeViews();
+});
 document.querySelectorAll('input[name="settings-rewrite-provider"]').forEach((input) => {
   input.addEventListener("change", async () => {
     if (!rewriteModel.value.trim()) {

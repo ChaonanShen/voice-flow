@@ -28,7 +28,7 @@ use voice_core::paste::{PasteSimulator, SystemPaste};
 use voice_core::push_to_talk::{PushToTalkRecorder, PushToTalkRecorderEvent};
 use voice_core::state::{RealtimeState, RealtimeStateEvent};
 use voice_core::text_pipeline::rewrite_settings_from_config;
-use voice_rewrite::{RewriteError, RewriteProvider, RewriteResult, RewriteTrace};
+use voice_rewrite::{Profile, RewriteError, RewriteProvider, RewriteResult, RewriteTrace};
 
 const SAMPLE_RATE: u32 = 16_000;
 const CHANNELS: u16 = 1;
@@ -50,7 +50,25 @@ struct RuntimeState {
     running: bool,
     restart_requested: bool,
     paused: bool,
+    output_mode: DesktopOutputMode,
     manual_input: Option<Sender<PushToTalkEvent>>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+enum DesktopOutputMode {
+    #[default]
+    FloatingInput,
+    VoicePad,
+}
+
+impl DesktopOutputMode {
+    fn label(self) -> &'static str {
+        match self {
+            Self::FloatingInput => "floating_input",
+            Self::VoicePad => "voice_pad",
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -88,6 +106,20 @@ struct TimingEvent {
     paste_ms: Option<u128>,
 }
 
+#[derive(Clone, Debug, Serialize)]
+struct DesktopOutputResultEvent {
+    output_mode: DesktopOutputMode,
+    raw_transcript: String,
+    final_text: String,
+    profile: String,
+    variants: HashMap<String, String>,
+    fallback: bool,
+    error: Option<String>,
+    trace: Option<RewriteTrace>,
+    timings: TimingEvent,
+    pasted_to_external: bool,
+}
+
 #[derive(Clone, Debug, Deserialize)]
 struct RewriteKeyRequest {
     provider: RewriteProvider,
@@ -115,6 +147,7 @@ struct DiagnosticsEvent {
     runtime_running: bool,
     restart_requested: bool,
     paused: bool,
+    output_mode: DesktopOutputMode,
     rewrite_enabled: bool,
     rewrite_provider: RewriteProvider,
     rewrite_key_saved: bool,
@@ -235,6 +268,27 @@ fn get_pause_state(state: State<'_, DesktopState>) -> PauseStateEvent {
 }
 
 #[tauri::command]
+fn get_output_mode(state: State<'_, DesktopState>) -> DesktopOutputMode {
+    current_output_mode(&state.runtime)
+}
+
+#[tauri::command]
+fn set_output_mode(
+    output_mode: DesktopOutputMode,
+    app: AppHandle,
+    state: State<'_, DesktopState>,
+) -> DesktopOutputMode {
+    state
+        .runtime
+        .lock()
+        .expect("runtime mutex poisoned")
+        .output_mode = output_mode;
+    append_log(format!("output mode set to {}", output_mode.label()));
+    emit_output_mode(&app, output_mode);
+    output_mode
+}
+
+#[tauri::command]
 fn set_pause_state(
     paused: bool,
     app: AppHandle,
@@ -322,6 +376,7 @@ fn main() {
             running: false,
             restart_requested: false,
             paused: false,
+            output_mode: DesktopOutputMode::default(),
             manual_input: None,
         })),
     };
@@ -339,6 +394,8 @@ fn main() {
             delete_rewrite_key,
             get_diagnostics,
             get_pause_state,
+            get_output_mode,
+            set_output_mode,
             set_pause_state,
             begin_manual_recording,
             end_manual_recording,
@@ -353,6 +410,7 @@ fn main() {
                 "realtime-state",
                 RealtimeStateEvent::new(RealtimeState::Idle),
             )?;
+            app.emit("output-mode-updated", DesktopOutputMode::default())?;
             app.emit("pause-state", PauseStateEvent { paused: false })?;
             Ok(())
         })
@@ -497,23 +555,38 @@ fn run_runtime_session(app: &AppHandle, runtime: &RuntimeHandle, config: AppConf
                     } else {
                         None
                     };
-                    let paste_started = Instant::now();
-                    if let Err(err) = paste_transcript(&rewrite.text) {
-                        let message = format!("{err:#}");
-                        append_log(format!("paste failed: {message}"));
-                        emit_paste_failure(app, rewrite.text.clone(), message);
+                    let output_mode = current_output_mode(runtime);
+                    let mut paste_ms = None;
+                    let mut pasted_to_external = false;
+                    if output_mode == DesktopOutputMode::FloatingInput {
+                        let paste_started = Instant::now();
+                        match paste_transcript(&rewrite.text) {
+                            Ok(()) => {
+                                pasted_to_external = true;
+                            }
+                            Err(err) => {
+                                let message = format!("{err:#}");
+                                append_log(format!("paste failed: {message}"));
+                                emit_paste_failure(app, rewrite.text.clone(), message);
+                            }
+                        }
+                        paste_ms = Some(paste_started.elapsed().as_millis());
                     }
-                    let paste_ms = paste_started.elapsed().as_millis();
+                    let timings = TimingEvent {
+                        asr_ms,
+                        rewrite_ms,
+                        paste_ms,
+                    };
+                    emit_desktop_output_result(
+                        app,
+                        output_mode,
+                        &transcript,
+                        &rewrite,
+                        timings.clone(),
+                        pasted_to_external,
+                    );
                     if let Some(result) = &rewrite.result {
-                        emit_rewrite_result(
-                            app,
-                            result,
-                            TimingEvent {
-                                asr_ms,
-                                rewrite_ms,
-                                paste_ms: Some(paste_ms),
-                            },
-                        );
+                        emit_rewrite_result(app, result, timings);
                     }
                     emit_state(
                         app,
@@ -670,6 +743,7 @@ fn diagnostics_event(state: &State<'_, DesktopState>) -> Result<DiagnosticsEvent
         runtime_running: runtime.running,
         restart_requested: runtime.restart_requested,
         paused: runtime.paused,
+        output_mode: runtime.output_mode,
         rewrite_enabled: runtime.config.rewrite.enabled,
         rewrite_provider: runtime.config.rewrite.provider,
         rewrite_key_saved,
@@ -768,6 +842,10 @@ fn pause_state_event(runtime: &RuntimeHandle) -> PauseStateEvent {
     }
 }
 
+fn current_output_mode(runtime: &RuntimeHandle) -> DesktopOutputMode {
+    runtime.lock().expect("runtime mutex poisoned").output_mode
+}
+
 fn is_paused(runtime: &RuntimeHandle) -> bool {
     runtime.lock().expect("runtime mutex poisoned").paused
 }
@@ -790,6 +868,10 @@ fn emit_pause_state(app: &AppHandle, paused: bool) {
     let _ = app.emit("pause-state", PauseStateEvent { paused });
 }
 
+fn emit_output_mode(app: &AppHandle, output_mode: DesktopOutputMode) {
+    let _ = app.emit("output-mode-updated", output_mode);
+}
+
 fn emit_rewrite_result(app: &AppHandle, result: &RewriteResult, timings: TimingEvent) {
     let _ = app.emit(
         "rewrite-result",
@@ -801,6 +883,48 @@ fn emit_rewrite_result(app: &AppHandle, result: &RewriteResult, timings: TimingE
             error: result.trace.error.clone(),
             trace: result.trace.clone(),
             timings,
+        },
+    );
+}
+
+fn emit_desktop_output_result(
+    app: &AppHandle,
+    output_mode: DesktopOutputMode,
+    raw_transcript: &str,
+    rewrite: &DesktopRewriteOutput,
+    timings: TimingEvent,
+    pasted_to_external: bool,
+) {
+    let (profile, variants, fallback, error, trace) = match &rewrite.result {
+        Some(result) => (
+            result.trace.profile.label().to_string(),
+            result.variants.clone(),
+            result.trace.fallback,
+            result.trace.error.clone(),
+            Some(result.trace.clone()),
+        ),
+        None => (
+            Profile::Off.label().to_string(),
+            HashMap::new(),
+            false,
+            None,
+            None,
+        ),
+    };
+
+    let _ = app.emit(
+        "desktop-output-result",
+        DesktopOutputResultEvent {
+            output_mode,
+            raw_transcript: raw_transcript.to_string(),
+            final_text: rewrite.text.clone(),
+            profile,
+            variants,
+            fallback,
+            error,
+            trace,
+            timings,
+            pasted_to_external,
         },
     );
 }
