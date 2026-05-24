@@ -363,6 +363,75 @@ fn main() {
 
 读取顺序见 [.env.example](./.env.example) 顶部注释：keyring > 进程 env > .env 文件。
 
+### 3.6 模型档位与 thinking mode 的选择
+
+**默认 `deepseek-chat`（= v4-flash），不开 thinking。** 这是有意识的选择，记录理由如下。
+
+#### 为什么 flash 够用
+
+改写任务的本质是**模式转换 + 风格迁移**，不是推理 / 数学 / 因果分析。模型不需要"思考再回答"，flash 在它的舒适区里。各 Profile 的实际负担：
+
+| Profile | 模型在做什么 | flash 够用？ |
+|---|---|---|
+| `clean` | 模式删除（嗯/啊）+ 标点补全 | ✅ 杀鸡用牛刀 |
+| `wechat` / `commit` | 风格转换 + 长度约束 | ✅ |
+| `polish` | 风格转换 + 词汇升级 | ✅ |
+| `email` | 格式扩展（称呼 + 正文 + 结尾） | ✅ |
+| `bullets` | 信息抽取 + 重组 | ✅ 偶尔会"过度合并" |
+| `prompt` | 把含糊需求翻译成结构化 prompt | ⚠️ 临界 — 简单够用，复杂需求 V3 更好 |
+| `multi` | 一次出 4 版本 + 风格区分 | ⚠️ 临界 — 偶尔风格区分度不够 |
+
+§3.1 的实测已经验证 clean / multi 在 flash 上的输出质量符合预期。
+
+#### 为什么**不开** thinking
+
+1. **延迟爆表**：thinking 让首 token 从 ~400ms 拉到 ~3~10s。§7.3 的延迟 budget 是 "ASR + 1~2s"，开 thinking 直接破表
+2. **改写没有推理路径**：模型不需要"先想再写"，直接给答案就行
+3. **成本翻倍**：thinking token 通常按输出 token 计费，对高频调用场景不划算
+
+#### 真正可能需要升档的两个边界
+
+1. **prompt 档遇到含糊需求** → 升 `deepseek-v3-1` 或 Claude Opus，能更好推断隐含意图
+2. **multi 档 4 个版本风格区分不够** → 升 `deepseek-v3-1`，V3 系列生成更发散
+
+这两个场景**都不会在黑客松 demo 出现**——demo 用的是清晰简短的口语，flash 完全应付得了。
+
+#### 留好的扩展点：profile_overrides
+
+§5.4 的配置 schema 里**预留** `profile_overrides`，允许某个 Profile 单独覆盖 model（v1 不实现，留接口）：
+
+```toml
+[rewrite]
+provider = "deepseek"
+model = "deepseek-chat"        # 全局默认
+
+# v2 扩展：profile 级覆盖
+[rewrite.profile_overrides.multi]
+model = "deepseek-v3-1"        # multi 档单独用更强的模型
+
+[rewrite.profile_overrides.prompt]
+model = "deepseek-v3-1"
+```
+
+代码侧 `Pipeline::resolve_model(profile)` 优先读 overrides，未命中 fall back 到全局 `model`。**v1 写一行 `unwrap_or(global_model)` 就够，将来扩展不破坏现有调用方**。
+
+#### Day 3 前的验证动作
+
+跑通 Day 1~2 后，用 demo 那段固定 WAV 做 A/B 对比：
+
+```bash
+voice-cli rewrite --profile=multi --model=deepseek-chat  < demo.txt
+voice-cli rewrite --profile=multi --model=deepseek-v3-1  < demo.txt
+```
+
+肉眼对比 4 个版本的风格差异度。90% 概率 flash 已经够好，保持默认；如果明显差，给 multi / prompt 单独配 V3。
+
+#### 结论
+
+- **v1 默认**：`deepseek-chat`（flash 别名），全档共用，不开 thinking
+- **扩展点已留**：`profile_overrides` schema 写进 §5.4，v1 不实现但代码侧 `resolve_model` 留一行
+- **Day 3 视进度**：跑 A/B，决定 multi / prompt 是否单独升档
+
 ---
 
 ## 4. 数据流与模块边界
@@ -573,6 +642,12 @@ api_key_ref = "system-keyring"           # 桌面端 keyring；CLI / 测试 fall
 
 [rewrite.profiles.custom]
 system_prompt = ""                       # 高级用户自己写
+
+# === v2 扩展点（v1 不实现，但 config schema 预留键名以免破坏向后兼容） ===
+# 某个 Profile 单独覆盖 model，用于 multi / prompt 在质量要求高时升档。
+# 设计依据见 §3.6。
+# [rewrite.profile_overrides.multi]
+# model = "deepseek-v3-1"
 ```
 
 桌面端 API key 默认走 keyring（Windows Credential Manager）；CLI / 单元测试可直接读 env / `.env`。
