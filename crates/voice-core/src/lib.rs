@@ -13,4 +13,5 @@ pub mod hotkey;
 pub mod paste;
 pub mod push_to_talk;
 pub mod state;
+pub mod text_pipeline;
 pub mod wav;
