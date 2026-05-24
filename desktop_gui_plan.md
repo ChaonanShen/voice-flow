@@ -19,11 +19,31 @@
 按住快捷键 -> 录音 -> 本地 ASR -> 可选 AI rewrite -> 剪贴板 -> 粘贴
 ```
 
+后续桌面 UI 明确成同一个语音写作引擎的两个出口，而不是两个产品：
+
+```text
+Audio Capture
+-> ASR
+-> Preprocess
+-> Profile / Voice Command Resolver
+-> AI Rewrite
+-> Result
+-> Output Adapter
+```
+
+两个 UI 模式共享同一条 pipeline：
+
+| 模式 | 定位 | Output Adapter |
+|---|---|---|
+| Voice Pad | 在 voice-flow 里写长文本、草稿、多版本对比 | Result -> 插入 / 替换 Voice Pad 内部编辑器内容 |
+| Floating Input | 向当前外部应用输入，像系统级语音输入法 | Result -> clipboard -> simulated paste 到当前应用 |
+
 GUI 提升的目标不是重写核心引擎，而是补齐普通 Windows 用户会自然期待的桌面体验：
 
 - 设置可视化、持久化、安全保存。
 - 状态清楚：待机、录音、转写、改写、完成、失败。
 - 错误可理解：缺模型、缺 key、麦克风失败、快捷键冲突、LLM fallback。
+- 双模式清楚：Voice Pad 是内部写作工作台，Floating Input 是外部输入状态面板。
 - 常驻可控：托盘、暂停、退出、窗口行为合理。
 - 可交付：打包、日志、诊断、人工验收清单。
 
@@ -98,6 +118,67 @@ crates/voice-rewrite
 
 GUI 不直接实现 ASR 或 rewrite 规则。前端只接 command 和 event。
 
+### 4.1.1 两种 UI 模式
+
+桌面主窗口需要有清晰的模式切换：
+
+```text
+Voice Pad | Floating Input | Settings
+```
+
+最小改动方案优先：继续使用原生 HTML / CSS / JS，不引入大型前端框架。模式切换只改变 UI 组织和 output adapter，不复制 ASR、rewrite、clipboard、paste 等核心逻辑。
+
+#### Voice Pad
+
+定位：软件本身像一个带 AI 语音输入能力的记事本。
+
+适合：
+
+- 长文本草稿。
+- 邮件草稿。
+- 会议纪要。
+- prompt 草稿。
+- 想法整理。
+- 多版本对比后再复制或使用。
+
+UI 要素：
+
+- 一个主要文本编辑区，显示最终可用文本。
+- 最近一次原始 ASR 文本。
+- 当前 rewrite profile。
+- rewrite variants：clean / polish / email / wechat / bullets / prompt 等。
+- 用户能看到“原始转写 -> AI 改写后结果”的关系。
+- 用户可以复制最终结果。
+- 如果当前有 multi variants，可以切换查看不同版本。
+
+暂时不要求复杂富文本，`textarea` 或 `contenteditable` 都可以。第一版重点是信息架构清晰。
+
+#### Floating Input
+
+定位：系统级输入法感觉。用户焦点在 VS Code、邮箱、微信、飞书、浏览器输入框等外部软件里，按住快捷键说话，松开后自动转写、可选 rewrite，并粘贴到当前光标位置。
+
+UI 要素：
+
+- 紧凑悬浮窗。
+- 当前状态：Idle / Recording / Transcribing / Rewriting / Completed / Error。
+- 当前 profile chip。
+- 最近一次输出文本摘要。
+- rewrite fallback 的轻量提示，不打断用户。
+- variants 可以有入口或简化 tabs，但悬浮窗不能变成重编辑器。
+
+现有自动粘贴链路必须保持。新增 Voice Pad 时，不能破坏 Floating Input 的 `clipboard -> simulated paste` 行为。
+
+### 4.1.2 Output Adapter 策略
+
+当前 desktop runtime 默认在完成 ASR / rewrite 后自动调用 `paste_transcript`。要支持 Voice Pad，需要在 desktop 层新增一个很薄的 output mode 状态：
+
+| output mode | 行为 |
+|---|---|
+| `floating_input` | 保持现状：Result -> clipboard -> simulated paste；继续发 `rewrite-result` / `realtime-state` 事件给 UI |
+| `voice_pad` | 不自动粘贴到外部应用；发结果事件给 UI，由前端把最终文本插入 / 替换 Voice Pad 编辑区 |
+
+这个状态只属于 desktop shell，不进入 `voice-core` / `voice-rewrite`。ASR、rewrite、clipboard、paste 的实现不重写。
+
 ### 4.2 配置与密钥
 
 - 普通配置写 `%APPDATA%\voice-flow\app.toml`。
@@ -118,6 +199,8 @@ GUI 应主要监听事件，而不是轮询 runtime：
 - `realtime-state`：录音 / 转写 / 改写 / 完成 / 错误。
 - `rewrite-result`：rewrite profile、main text、variants、fallback、error。
 - 后续新增：
+  - `desktop-output-result` 或等价事件：包含 raw transcript、final text、profile、variants、fallback、timings，用于 Voice Pad 写入内部编辑器
+  - `output-mode-updated`：GUI 模式切换时同步当前 output adapter
   - `rewrite-trace`
   - `runtime-diagnostics`
   - `settings-updated`
@@ -206,6 +289,38 @@ GUI 应主要监听事件，而不是轮询 runtime：
 - 托盘可暂停/恢复。
 - 暂停后快捷键不会触发录音。
 - 从托盘退出能释放快捷键和音频资源。
+
+### G4.5a：双模式桌面 UI（计划新增）
+
+目标：把桌面 UI 明确分成 Voice Pad 和 Floating Input 两种形态，同时共用现有 pipeline。
+
+建议 PR：
+
+| PR | 标题 | 单一职责 |
+|---|---|---|
+| G4.5a.1 | `docs(desktop): plan dual desktop modes` | 记录 Voice Pad / Floating Input 的 UI 目标、output adapter 和验收标准 |
+| G4.5a.2 | `feat(desktop): add output mode state` | desktop shell 增加 `voice_pad` / `floating_input` 状态和 command/event，不改 core pipeline |
+| G4.5a.3 | `feat(desktop): add desktop mode navigation` | 主窗口增加 Voice Pad / Floating Input / Settings 模式切换 |
+| G4.5a.4 | `feat(desktop): add voice pad editor` | Voice Pad 添加编辑区、last transcript、final text、copy 和 variants 展示 |
+| G4.5a.5 | `feat(desktop): refine floating input panel` | Floating Input 保留自动粘贴链路，压缩为状态、profile、摘要、fallback 入口 |
+| G4.5a.6 | `docs(desktop): document dual mode usage` | README 或 GUI 文档补充两种模式说明 |
+
+执行约束：
+
+- 优先改 `apps/desktop/ui`。
+- 只在必要时小幅修改 `apps/desktop/src-tauri/src/main.rs`，用于 output mode 状态和结果事件。
+- 不重写 ASR、rewrite、clipboard、paste。
+- 不引入大型前端框架。
+- UI 要支持当前 460x360 窄窗口，避免文本溢出和元素重叠。
+- 页面必须是实际工具界面，不做 marketing landing page。
+
+验收：
+
+- 打开桌面端后，可以清楚看到 Voice Pad 和 Floating Input 两种模式。
+- Floating Input 的按住说话、转写、rewrite、自动粘贴能力不被破坏。
+- Voice Pad 能展示最近一次 ASR / rewrite 结果，并能复制最终文本。
+- multi variants 如果后端返回，至少 Voice Pad 能清楚展示和切换。
+- UI 不像配置面板堆叠，而像一个真实的语音写作工具。
 
 ### G5：快捷键、粘贴和 Windows 实机兼容
 
