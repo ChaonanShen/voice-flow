@@ -7,15 +7,15 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <main class="shell" aria-label="voice-flow voice input">
-      <nav class="mode-nav" aria-label="Desktop mode" data-tauri-drag-region="deep">
+    <main class="shell" aria-label="voice-flow 语音输入">
+      <nav class="mode-nav" aria-label="模式切换" data-tauri-drag-region="deep">
         <button
           class="mode-tab"
           type="button"
           aria-selected="false"
           data-mode-tab="voice-pad"
         >
-          Voice Pad
+          文稿模式
         </button>
         <button
           class="mode-tab is-active"
@@ -23,7 +23,7 @@
           aria-selected="true"
           data-mode-tab="floating"
         >
-          Floating Input
+          悬浮窗模式
         </button>
         <button
           class="mode-tab"
@@ -31,19 +31,19 @@
           aria-selected="false"
           data-mode-tab="settings"
         >
-          Settings
+          设置
         </button>
       </nav>
 
-      <section class="voice-pad mode-pane" data-mode-pane="voice-pad" hidden aria-label="Voice Pad">
+      <section class="voice-pad mode-pane" data-mode-pane="voice-pad" hidden aria-label="文稿模式">
         <div class="voice-pad-header" data-tauri-drag-region="deep">
-          <strong>Voice Pad</strong>
-          <span>Draft here</span>
+          <strong>文稿模式</strong>
+          <span>直接编辑</span>
         </div>
         <textarea
           id="voice-pad-editor"
           spellcheck="false"
-          aria-label="Voice Pad editor"
+          aria-label="文稿编辑区"
         ></textarea>
       </section>
 
@@ -61,14 +61,14 @@
         </button>
       </section>
 
-      <section class="mode-pane" data-mode-pane="floating" aria-label="Floating Input">
-        <section class="floating-panel" aria-label="Floating Input status">
+      <section class="mode-pane" data-mode-pane="floating" aria-label="悬浮窗模式">
+        <section class="floating-panel" aria-label="悬浮窗状态">
           <div class="floating-drag-handle" data-tauri-drag-region="deep" aria-hidden="true"></div>
           <button
             id="mic-button"
             class="mic-button"
             type="button"
-            aria-label="Floating microphone"
+            aria-label="麦克风"
             title="点击开始/结束；Alt+Space 按住说话"
           >
             <span class="mic-icon" aria-hidden="true"></span>
@@ -112,9 +112,9 @@
         </section>
       </section>
 
-      <section class="settings mode-pane" id="settings-panel" data-mode-pane="settings" hidden aria-label="Settings">
+      <section class="settings mode-pane" id="settings-panel" data-mode-pane="settings" hidden aria-label="设置">
         <div class="settings-header" data-tauri-drag-region="deep">
-          <strong>Settings</strong>
+          <strong>设置</strong>
           <button id="settings-close" class="settings-close" type="button">返回</button>
         </div>
 

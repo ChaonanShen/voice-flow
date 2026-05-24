@@ -430,13 +430,13 @@ function contextMenuItemsForActiveMode() {
   }
   if (hasVoicePad && activeMode !== "voice-pad") {
     items.push({
-      label: "切换到 Pad 模式",
+      label: "切换到文稿模式",
       mode: "voice-pad",
     });
   }
   if (activeMode !== "settings") {
     items.push({
-      label: "打开 Settings",
+      label: "打开设置",
       mode: "settings",
     });
   }
