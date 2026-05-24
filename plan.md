@@ -280,11 +280,11 @@ voice-flow/
 
 ---
 
-### Step 10：AI 改写（创新点，详细设计见 §十三）
+### Step 10：AI 改写（创新点，详细设计见 §十三 / `ai_rewrite_plan.md`）
 
 **目标**：参考 Wispr Flow / Superwhisper，在 ASR 之后挂一段可选的 LLM 改写管道：把口语化原文重写成 prompt / 邮件 / commit 等更可用的文本。
 
-> 这是当前的**草稿 Step**，PR 拆分等用户确认设计后再细化。先占位、不开工。
+> 详细落地计划见 [`ai_rewrite_plan.md`](./ai_rewrite_plan.md)。本节只保留主计划里的里程碑摘要。
 
 骨架 PR（占位，待 §十三 设计确认）：
 
@@ -296,7 +296,21 @@ voice-flow/
 | 10.4 | `feat(rewrite): llm-based rewrite` | 接入云端 LLM 改写 |
 | 10.5 | `feat(desktop): rewrite profile switch` | 桌面端切换改写档（关闭 / 邮件 / prompt 等） |
 
-**Step 验收**：待 §十三 设计明确后回填。
+**实际进展（2026-05-24）**：
+
+- **非 GUI rewrite 引擎已完成主链路**：`voice-rewrite` crate、预处理、用户词典、语音命令识别、多 profile、multi JSON 输出、postprocess 兜底、DeepSeek / DashScope / OpenAI provider 都已落地。
+- **core / CLI 接线已完成**：`app.toml [rewrite]` schema、`voice-core::text_pipeline`、`voice-cli rewrite`、`voice-cli transcribe --rewrite`、`voice-cli push-to-talk-transcribe --rewrite` 均可用；不开 rewrite 时默认链路仍等价于 ASR 原文。
+- **文档与 demo 已完成非 GUI 部分**：README 增加 AI 改写使用指南，`docs/demo-rewrite.md` 增加演示步骤，`docs/fixtures/demo-rewrite.wav` 提供固定 16 kHz mono WAV fixture。
+- **后置项**：桌面设置面板、keyring、悬浮窗 profile 显示、multi 版本标签、热更新和 trace overlay 按“GUI 最后做”后置。
+
+**当前验收命令**：
+
+```bash
+cargo test -p voice-rewrite
+cargo test -p voice-core
+cargo test -p voice-cli
+cargo run -p voice-cli -- transcribe docs/fixtures/demo-rewrite.wav --rewrite clean --rewrite-provider deepseek
+```
 
 ---
 
