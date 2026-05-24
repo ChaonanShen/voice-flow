@@ -4,6 +4,28 @@
 
 不要在 WSL 里做完整链路测试，因为全局快捷键、麦克风、剪贴板和模拟粘贴都需要 Windows 原生 API。
 
+## Windows 使用注意
+
+Codex / PowerShell 会话里的 `PATH` 可能没有继承用户级 Rust 路径。若直接运行 `cargo` 报 `The term 'cargo' is not recognized`，优先使用绝对路径：
+
+```powershell
+& C:\Users\16867\.cargo\bin\cargo.exe --version
+& C:\Users\16867\.cargo\bin\cargo.exe build -p voice-cli
+```
+
+读取中文 Markdown 时固定使用 UTF-8，避免 PowerShell 控制台把文档显示成乱码：
+
+```powershell
+$OutputEncoding = [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
+Get-Content -Raw -Encoding UTF8 .\windows_testing.md
+```
+
+如果仍有显示问题，使用 .NET API 直接按 UTF-8 读文件：
+
+```powershell
+[System.IO.File]::ReadAllText("windows_testing.md", [System.Text.Encoding]::UTF8)
+```
+
 ## 1. 安装环境
 
 安装以下组件：
