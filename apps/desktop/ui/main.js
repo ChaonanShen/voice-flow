@@ -46,6 +46,7 @@ const configDefaults = {
 const dot = document.querySelector(".status-dot");
 const stateLabel = document.querySelector("#state-label");
 const lastTranscript = document.querySelector("#last-transcript");
+const rewriteChip = document.querySelector("#rewrite-chip");
 const runtimeError = document.querySelector("#runtime-error");
 const runtimeErrorText = document.querySelector("#runtime-error-text");
 const settingsToggle = document.querySelector("#settings-toggle");
@@ -146,6 +147,10 @@ function currentRewriteProvider() {
 
 function applyRewriteConfig(rewrite) {
   const config = { ...rewriteDefaults, ...(rewrite ?? {}) };
+  configSnapshot = {
+    ...configSnapshot,
+    rewrite: config,
+  };
   rewriteEnabled.checked = Boolean(config.enabled);
   rewriteProfile.value = config.default_profile ?? rewriteDefaults.default_profile;
   setRewriteProvider(config.provider ?? rewriteDefaults.provider);
@@ -182,6 +187,8 @@ function updateRewriteSummary() {
   rewriteProviderSummary.textContent = provider;
   rewriteProfileSummary.textContent = profile;
   rewriteKeySummary.textContent = meta.env;
+  rewriteChip.textContent = rewriteEnabled.checked ? `改写 ${profile}` : "改写关闭";
+  rewriteChip.dataset.enabled = String(rewriteEnabled.checked);
 }
 
 function switchSettingsTab(tab) {

@@ -120,6 +120,38 @@ h1 {
   padding-top: 2px;
 }
 
+.transcript-meta {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.transcript-meta .label {
+  margin-bottom: 0;
+}
+
+#rewrite-chip {
+  overflow: hidden;
+  max-width: 128px;
+  padding: 3px 7px;
+  border: 1px solid #d8dee8;
+  border-radius: 5px;
+  background: #ffffff;
+  color: #596579;
+  font-size: 11px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#rewrite-chip[data-enabled="true"] {
+  border-color: #c4b5fd;
+  background: #f5f3ff;
+  color: #5b21b6;
+}
+
 #last-transcript {
   display: -webkit-box;
   margin: 0;
