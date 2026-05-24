@@ -20,10 +20,12 @@ pub const DEFAULT_REWRITE_MODEL: &str = "deepseek-chat";
 pub const DEFAULT_REWRITE_TIMEOUT: Duration = Duration::from_secs(4);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
 pub enum RewriteProvider {
+    #[serde(rename = "deepseek")]
     DeepSeek,
+    #[serde(rename = "dashscope")]
     DashScope,
+    #[serde(rename = "openai")]
     OpenAi,
 }
 
@@ -291,6 +293,14 @@ mod tests {
         assert_eq!(
             "openai".parse::<RewriteProvider>().unwrap(),
             RewriteProvider::OpenAi
+        );
+        assert_eq!(
+            serde_json::to_string(&RewriteProvider::DeepSeek).unwrap(),
+            r#""deepseek""#
+        );
+        assert_eq!(
+            serde_json::from_str::<RewriteProvider>(r#""dashscope""#).unwrap(),
+            RewriteProvider::DashScope
         );
     }
 

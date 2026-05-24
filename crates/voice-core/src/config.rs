@@ -4,12 +4,15 @@ use std::fs;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use voice_rewrite::{Profile, RewriteProvider, DEFAULT_REWRITE_MODEL, DEFAULT_REWRITE_TIMEOUT};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AppConfig {
     pub model_dir: Option<String>,
     pub hotkey: HotkeyConfig,
+    pub rewrite: RewriteConfig,
 }
 
 impl Default for AppConfig {
@@ -17,6 +20,7 @@ impl Default for AppConfig {
         Self {
             model_dir: None,
             hotkey: HotkeyConfig::default(),
+            rewrite: RewriteConfig::default(),
         }
     }
 }
@@ -60,6 +64,30 @@ impl HotkeyConfig {
         }
         parts.push(self.key.clone());
         parts.join("+")
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct RewriteConfig {
+    pub enabled: bool,
+    pub provider: RewriteProvider,
+    pub model: Option<String>,
+    pub default_profile: Profile,
+    pub timeout_ms: u64,
+    pub user_dictionary: HashMap<String, String>,
+}
+
+impl Default for RewriteConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            provider: RewriteProvider::DeepSeek,
+            model: Some(DEFAULT_REWRITE_MODEL.to_string()),
+            default_profile: Profile::Clean,
+            timeout_ms: DEFAULT_REWRITE_TIMEOUT.as_millis() as u64,
+            user_dictionary: HashMap::new(),
+        }
     }
 }
 
@@ -138,6 +166,7 @@ mod tests {
         assert_eq!(config.hotkey.logo, false);
         assert_eq!(config.hotkey.key, "Space");
         assert_eq!(config.hotkey.to_label(), "Ctrl+Alt+Space");
+        assert_eq!(config.rewrite, RewriteConfig::default());
     }
 
     #[test]
@@ -153,6 +182,14 @@ mod tests {
                 shift: true,
                 logo: false,
                 key: "M".to_string(),
+            },
+            rewrite: RewriteConfig {
+                enabled: true,
+                provider: RewriteProvider::DashScope,
+                model: Some("qwen-plus".to_string()),
+                default_profile: Profile::Email,
+                timeout_ms: 3_000,
+                user_dictionary: HashMap::from([("克劳德".to_string(), "Claude".to_string())]),
             },
         };
         config.write_to(&path).unwrap();
@@ -170,5 +207,37 @@ mod tests {
         let loaded = AppConfig::read_from(&path).unwrap();
         assert_eq!(loaded.model_dir.as_deref(), Some("C:/models"));
         assert_eq!(loaded.hotkey, HotkeyConfig::default());
+        assert_eq!(loaded.rewrite, RewriteConfig::default());
+    }
+
+    #[test]
+    fn parse_rewrite_section() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("app.toml");
+        fs::write(
+            &path,
+            r#"
+[rewrite]
+enabled = true
+provider = "openai"
+model = "gpt-4o-mini"
+default_profile = "prompt"
+timeout_ms = 2500
+
+[rewrite.user_dictionary]
+"克劳德" = "Claude"
+"我推" = "Vue"
+"#,
+        )
+        .unwrap();
+
+        let loaded = AppConfig::read_from(&path).unwrap();
+        assert!(loaded.rewrite.enabled);
+        assert_eq!(loaded.rewrite.provider, RewriteProvider::OpenAi);
+        assert_eq!(loaded.rewrite.model.as_deref(), Some("gpt-4o-mini"));
+        assert_eq!(loaded.rewrite.default_profile, Profile::Prompt);
+        assert_eq!(loaded.rewrite.timeout_ms, 2_500);
+        assert_eq!(loaded.rewrite.user_dictionary["克劳德"], "Claude");
+        assert_eq!(loaded.rewrite.user_dictionary["我推"], "Vue");
     }
 }

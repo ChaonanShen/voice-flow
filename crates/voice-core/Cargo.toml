@@ -9,6 +9,7 @@ authors.workspace = true
 description = "Core engine: audio capture, ASR routing and mode pipeline"
 
 [dependencies]
+voice-rewrite = { path = "../voice-rewrite" }
 serde = { version = "1", features = ["derive"] }
 thiserror = "2"
 cpal = "0.15"
