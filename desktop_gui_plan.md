@@ -322,6 +322,12 @@ GUI 应主要监听事件，而不是轮询 runtime：
 - multi variants 如果后端返回，至少 Voice Pad 能清楚展示和切换。
 - UI 不像配置面板堆叠，而像一个真实的语音写作工具。
 
+实际进展（2026-05-24）：
+
+- 已完成 G4.5a.3 的第一步：主窗口增加 `Floating Input | Settings` 模式切换，Settings 不再只是临时展开面板。
+- 已完成 G4.5a.5 的第一步：Floating Input 压缩为状态面板，保留状态、profile、输出目标、最近输出、fallback / latency 和 variants 入口。
+- 暂未引入 Voice Pad，也暂未改变 runtime output adapter；当前自动粘贴链路仍保持 Floating Input 现状。
+
 ### G5：快捷键、粘贴和 Windows 实机兼容
 
 目标：把输入工具最容易出问题的 Windows 系统交互测扎实。
