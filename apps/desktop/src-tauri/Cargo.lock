@@ -4491,8 +4491,10 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tauri-plugin-global-shortcut",
+ "tokio",
  "voice-asr-local",
  "voice-core",
+ "voice-rewrite",
 ]
 
 [[package]]

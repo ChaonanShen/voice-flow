@@ -1,3 +1,4 @@
+use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::sync::{
     mpsc::{self, Receiver, TryRecvError},
@@ -20,6 +21,8 @@ use voice_core::hotkey::PushToTalkEvent;
 use voice_core::paste::{PasteSimulator, SystemPaste};
 use voice_core::push_to_talk::{PushToTalkRecorder, PushToTalkRecorderEvent};
 use voice_core::state::{RealtimeState, RealtimeStateEvent};
+use voice_core::text_pipeline::rewrite_settings_from_config;
+use voice_rewrite::{RewriteError, RewriteResult};
 
 const SAMPLE_RATE: u32 = 16_000;
 const CHANNELS: u16 = 1;
@@ -195,9 +198,11 @@ fn run_runtime_session(app: &AppHandle, runtime: &RuntimeHandle, config: AppConf
                 }
                 Some(PushToTalkRecorderEvent::RecordingStopped(audio)) => {
                     emit_state(app, RealtimeStateEvent::new(RealtimeState::Transcribing));
-                    let text = engine
+                    let transcript = engine
                         .transcribe(&audio.samples, audio.format)
                         .context("failed to transcribe recording")?;
+                    let text = maybe_rewrite_transcript(app, &config.rewrite, &transcript)
+                        .context("failed to rewrite transcript")?;
                     paste_transcript(&text).context("failed to paste transcript")?;
                     emit_state(
                         app,
@@ -264,6 +269,41 @@ fn paste_transcript(text: &str) -> Result<()> {
     let mut paste = SystemPaste::new();
     paste.paste()?;
     Ok(())
+}
+
+fn maybe_rewrite_transcript(
+    app: &AppHandle,
+    rewrite: &RewriteConfig,
+    transcript: &str,
+) -> Result<String> {
+    if !rewrite.enabled {
+        return Ok(transcript.to_string());
+    }
+
+    emit_state(app, RealtimeStateEvent::new(RealtimeState::Rewriting));
+    let engine = rewrite_settings_from_config(rewrite)
+        .build_engine()
+        .context("failed to initialize rewrite engine")?;
+    let result = run_rewrite(engine.process(transcript))?;
+
+    if result.trace.fallback {
+        if let Some(error) = &result.trace.error {
+            eprintln!("rewrite fallback: {error}");
+        }
+    }
+
+    Ok(result.main)
+}
+
+fn run_rewrite<F>(future: F) -> Result<RewriteResult>
+where
+    F: Future<Output = Result<RewriteResult, RewriteError>>,
+{
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .context("failed to build rewrite runtime")?;
+    runtime.block_on(future).context("failed to rewrite text")
 }
 
 fn take_restart(runtime: &RuntimeHandle) -> bool {
