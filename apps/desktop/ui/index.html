@@ -42,16 +42,28 @@
       </section>
 
       <section class="mode-pane" data-mode-pane="floating" aria-label="Floating Input">
-        <section class="transcript" aria-label="最近一次识别文本">
-          <div class="transcript-meta">
-            <p class="label">最近文本</p>
-            <span id="rewrite-chip">改写关闭</span>
+        <section class="floating-panel" aria-label="Floating Input status">
+          <div class="floating-meta">
+            <div>
+              <p class="label">Profile</p>
+              <span id="rewrite-chip">改写关闭</span>
+            </div>
+            <div>
+              <p class="label">Output</p>
+              <span id="output-target">Current app</span>
+            </div>
           </div>
-          <p id="last-transcript">尚无识别结果</p>
+
+          <div class="floating-output">
+            <p class="label">Last output</p>
+            <p id="last-transcript">尚无识别结果</p>
+          </div>
+
           <div class="result-meta" id="result-meta" hidden>
             <span id="fallback-reason"></span>
             <span id="latency-summary"></span>
           </div>
+
           <div class="variant-panel" id="variant-panel" hidden aria-label="改写候选">
             <div class="variant-tabs" role="tablist" aria-label="改写版本">
               <button class="variant-tab is-active" type="button" data-variant-tab="clean">
