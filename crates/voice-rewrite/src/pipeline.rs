@@ -136,6 +136,8 @@ where
                 system: system.to_string(),
                 user: preprocessed.cleaned_text.clone(),
                 response_format,
+                temperature: temperature_for_profile(selected_profile),
+                max_tokens: max_tokens_for_profile(selected_profile),
                 timeout: ctx.timeout,
             })
             .await;
@@ -221,6 +223,23 @@ fn parse_multi_response(content: &str) -> Result<HashMap<String, String>, String
         variants.insert(key.to_string(), value);
     }
     Ok(variants)
+}
+
+fn temperature_for_profile(profile: Profile) -> f32 {
+    match profile {
+        Profile::Multi => 0.5,
+        Profile::Polish | Profile::Email | Profile::Wechat | Profile::Prompt => 0.4,
+        _ => 0.3,
+    }
+}
+
+fn max_tokens_for_profile(profile: Profile) -> u32 {
+    match profile {
+        Profile::Multi => 800,
+        Profile::Email | Profile::Bullets | Profile::Prompt => 700,
+        Profile::Commit => 200,
+        _ => 500,
+    }
 }
 
 #[cfg(test)]
@@ -382,6 +401,8 @@ mod tests {
         assert_eq!(result.variants["bullets"], "- 晚到十分钟\n- 不用等");
         let calls = mock.calls();
         assert_eq!(calls[0].response_format, ResponseFormat::JsonObject);
+        assert_eq!(calls[0].temperature, 0.5);
+        assert_eq!(calls[0].max_tokens, 800);
     }
 
     #[tokio::test]

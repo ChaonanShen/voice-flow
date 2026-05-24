@@ -13,12 +13,14 @@ pub trait LlmClient: Send + Sync {
     async fn complete(&self, req: ChatRequest) -> Result<ChatResponse, LlmError>;
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ChatRequest {
     pub model: String,
     pub system: String,
     pub user: String,
     pub response_format: ResponseFormat,
+    pub temperature: f32,
+    pub max_tokens: u32,
     pub timeout: Duration,
 }
 
@@ -114,8 +116,8 @@ fn to_compat_request(req: &ChatRequest) -> CompatChatRequest<'_> {
                 content: &req.user,
             },
         ],
-        temperature: 0.3,
-        max_tokens: 500,
+        temperature: req.temperature,
+        max_tokens: req.max_tokens,
         response_format: match req.response_format {
             ResponseFormat::Text => None,
             ResponseFormat::JsonObject => Some(CompatResponseFormat {
