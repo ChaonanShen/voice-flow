@@ -13,6 +13,10 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 html,
 body {
   width: 100%;
@@ -79,6 +83,17 @@ select {
 
 .mode-pane[hidden] {
   display: none;
+}
+
+[data-mode-pane="floating"] {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+}
+
+[data-mode-pane="floating"] > :not(.floating-panel) {
+  display: none !important;
 }
 
 .status-row {
@@ -233,6 +248,10 @@ h1 {
   gap: 6px;
   min-width: 0;
   min-height: 0;
+}
+
+.floating-panel > :not(.floating-drag-handle):not(.mic-button) {
+  display: none !important;
 }
 
 .floating-drag-handle {
