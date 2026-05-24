@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  rust-and-ui-checks:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: UI syntax check
+        run: node --check apps/desktop/ui/main.js
+
+      - name: Core tests
+        run: cargo test -p voice-core
+
+      - name: Rewrite tests
+        run: cargo test -p voice-rewrite
+
+      - name: Desktop check
+        run: cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml
