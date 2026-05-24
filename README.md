@@ -100,7 +100,7 @@ cargo test -p voice-core text_pipeline
 cargo test -p voice-rewrite --test live_deepseek_examples -- --ignored --nocapture --test-threads=1
 ```
 
-更多演示步骤见 [`docs/demo-rewrite.md`](./docs/demo-rewrite.md)。
+更多演示步骤见 [`docs/demo-rewrite.md`](./docs/demo-rewrite.md)。当前阶段完成项、GUI 运行方式和测试记录见 [`docs/rewrite-stage-report.md`](./docs/rewrite-stage-report.md)。
 
 ## 六、模型下载
 
