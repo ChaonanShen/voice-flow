@@ -4,7 +4,7 @@ use std::future::Future;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::{
-    mpsc::{self, Receiver, TryRecvError},
+    mpsc::{self, Receiver, Sender, TryRecvError},
     Arc, Mutex,
 };
 use std::thread;
@@ -50,6 +50,7 @@ struct RuntimeState {
     running: bool,
     restart_requested: bool,
     paused: bool,
+    manual_input: Option<Sender<PushToTalkEvent>>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -250,6 +251,16 @@ fn set_pause_state(
 }
 
 #[tauri::command]
+fn begin_manual_recording(state: State<'_, DesktopState>) -> Result<(), String> {
+    send_manual_input(&state.runtime, PushToTalkEvent::Pressed)
+}
+
+#[tauri::command]
+fn end_manual_recording(state: State<'_, DesktopState>) -> Result<(), String> {
+    send_manual_input(&state.runtime, PushToTalkEvent::Released)
+}
+
+#[tauri::command]
 fn copy_text(text: String) -> Result<(), String> {
     if text.trim().is_empty() {
         return Err("copy text cannot be empty".to_string());
@@ -311,6 +322,7 @@ fn main() {
             running: false,
             restart_requested: false,
             paused: false,
+            manual_input: None,
         })),
     };
 
@@ -328,6 +340,8 @@ fn main() {
             get_diagnostics,
             get_pause_state,
             set_pause_state,
+            begin_manual_recording,
+            end_manual_recording,
             copy_text,
             paste_text,
             start_runtime
@@ -427,6 +441,8 @@ fn run_runtime_session(app: &AppHandle, runtime: &RuntimeHandle, config: AppConf
     let hotkey = DesktopHotkey::register(app, config.hotkey.clone())
         .with_context(|| format!("failed to register hotkey {}", config.hotkey.to_label()))?;
     append_log(format!("registered hotkey {}", config.hotkey.to_label()));
+    let (manual_tx, manual_rx) = mpsc::channel();
+    let _manual_input = register_manual_input(runtime, manual_tx);
     let mut recorder = PushToTalkRecorder::new(
         CpalCapture::new(),
         AudioFormat {
@@ -450,12 +466,12 @@ fn run_runtime_session(app: &AppHandle, runtime: &RuntimeHandle, config: AppConf
                 append_log("recording cancelled because listener paused");
                 emit_state(app, RealtimeStateEvent::new(RealtimeState::Idle));
             }
-            drain_hotkey_events(&hotkey)?;
+            drain_input_events(&hotkey, &manual_rx)?;
             thread::sleep(Duration::from_millis(20));
             continue;
         }
 
-        if let Some(event) = hotkey.try_recv().context("failed to read hotkey event")? {
+        if let Some(event) = next_push_to_talk_event(&hotkey, &manual_rx)? {
             match recorder
                 .handle_hotkey_event(event)
                 .map_err(|e| anyhow::anyhow!(e))
@@ -511,6 +527,68 @@ fn run_runtime_session(app: &AppHandle, runtime: &RuntimeHandle, config: AppConf
         }
 
         thread::sleep(Duration::from_millis(20));
+    }
+}
+
+struct ManualInputRegistration {
+    runtime: RuntimeHandle,
+}
+
+impl Drop for ManualInputRegistration {
+    fn drop(&mut self) {
+        self.runtime
+            .lock()
+            .expect("runtime mutex poisoned")
+            .manual_input = None;
+    }
+}
+
+fn register_manual_input(
+    runtime: &RuntimeHandle,
+    tx: Sender<PushToTalkEvent>,
+) -> ManualInputRegistration {
+    runtime.lock().expect("runtime mutex poisoned").manual_input = Some(tx);
+    ManualInputRegistration {
+        runtime: Arc::clone(runtime),
+    }
+}
+
+fn send_manual_input(runtime: &RuntimeHandle, event: PushToTalkEvent) -> Result<(), String> {
+    let tx = runtime
+        .lock()
+        .expect("runtime mutex poisoned")
+        .manual_input
+        .clone()
+        .ok_or_else(|| "voice runtime is not ready".to_string())?;
+
+    tx.send(event)
+        .map_err(|_| "voice runtime is not accepting manual input".to_string())
+}
+
+fn next_push_to_talk_event(
+    hotkey: &DesktopHotkey,
+    manual_rx: &Receiver<PushToTalkEvent>,
+) -> Result<Option<PushToTalkEvent>> {
+    if let Some(event) = hotkey.try_recv().context("failed to read hotkey event")? {
+        return Ok(Some(event));
+    }
+
+    try_recv_manual_input(manual_rx).context("failed to read manual input event")
+}
+
+fn drain_input_events(hotkey: &DesktopHotkey, manual_rx: &Receiver<PushToTalkEvent>) -> Result<()> {
+    drain_hotkey_events(hotkey)?;
+    while try_recv_manual_input(manual_rx)?.is_some() {}
+    Ok(())
+}
+
+fn try_recv_manual_input(manual_rx: &Receiver<PushToTalkEvent>) -> Result<Option<PushToTalkEvent>> {
+    match manual_rx.try_recv() {
+        Ok(event) => Ok(Some(event)),
+        Err(TryRecvError::Empty) => Ok(None),
+        Err(TryRecvError::Disconnected) => {
+            anyhow::bail!("manual input event channel disconnected")
+        }
     }
 }
 

@@ -110,12 +110,18 @@ let rewriteKeySaved = false;
 let paused = false;
 let activeMode = "floating";
 let currentState = "idle";
+let manualRecording = false;
 
 function applyState(event) {
   const state = event?.state ?? "idle";
   currentState = state;
   dot.dataset.state = state;
   micButton.dataset.state = state;
+  if (state !== "recording" && manualRecording) {
+    setManualRecording(false);
+  } else {
+    updateMicTitle();
+  }
   stateLabel.textContent = paused ? "已暂停" : labels[state] ?? labels.idle;
 
   if (state !== "error") {
@@ -145,7 +151,11 @@ function applyPauseState(event) {
   pauseToggle.dataset.active = String(paused);
   micButton.dataset.paused = String(paused);
   pauseToggle.title = paused ? "恢复监听" : "暂停监听";
-  micButton.title = paused ? "监听已暂停" : "按住 Alt+Space 说话";
+  if (paused) {
+    setManualRecording(false);
+  } else {
+    updateMicTitle();
+  }
   pauseToggle.querySelector("span").textContent = paused ? ">" : "||";
   if (paused) {
     dot.dataset.state = "idle";
@@ -157,6 +167,23 @@ function applyPauseState(event) {
   if (activeSettingsTab === "diagnostics") {
     refreshDiagnosticsPanel();
   }
+}
+
+function setManualRecording(active) {
+  manualRecording = Boolean(active);
+  micButton.dataset.manualRecording = String(manualRecording);
+  if (manualRecording) {
+    micButton.dataset.state = "recording";
+  }
+  updateMicTitle();
+}
+
+function updateMicTitle() {
+  micButton.title = paused
+    ? "监听已暂停"
+    : manualRecording
+      ? "点击结束录音"
+      : "点击开始/结束；Alt+Space 按住说话";
 }
 
 function applyRewriteResult(result) {
@@ -497,6 +524,7 @@ modeTabs.forEach((button) => {
 });
 
 pauseToggle.addEventListener("click", togglePauseState);
+micButton.addEventListener("click", toggleManualRecording);
 
 async function togglePauseState() {
   const next = !paused;
@@ -510,6 +538,52 @@ async function togglePauseState() {
     applyPauseState(state);
   } catch (error) {
     applyPauseState({ paused: !next });
+    settingsMessage.textContent = String(error);
+  }
+}
+
+async function toggleManualRecording() {
+  if (paused) {
+    settingsMessage.textContent = "监听已暂停";
+    return;
+  }
+
+  if (manualRecording) {
+    await endManualRecording();
+  } else {
+    await beginManualRecording();
+  }
+}
+
+async function beginManualRecording() {
+  if (!invoke) {
+    setManualRecording(true);
+    applyState({ state: "recording" });
+    settingsMessage.textContent = "预览模式";
+    return;
+  }
+
+  try {
+    await invoke("begin_manual_recording");
+    setManualRecording(true);
+  } catch (error) {
+    setManualRecording(false);
+    settingsMessage.textContent = String(error);
+  }
+}
+
+async function endManualRecording() {
+  if (!invoke) {
+    setManualRecording(false);
+    applyState({ state: "idle" });
+    settingsMessage.textContent = "预览模式";
+    return;
+  }
+
+  try {
+    await invoke("end_manual_recording");
+    setManualRecording(false);
+  } catch (error) {
     settingsMessage.textContent = String(error);
   }
 }
