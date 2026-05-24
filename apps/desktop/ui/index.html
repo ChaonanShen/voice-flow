@@ -8,7 +8,7 @@
   </head>
   <body>
     <main class="shell" aria-label="voice-flow voice input">
-      <nav class="mode-nav" aria-label="Desktop mode">
+      <nav class="mode-nav" aria-label="Desktop mode" data-tauri-drag-region="deep">
         <button
           class="mode-tab is-active"
           type="button"
@@ -27,7 +27,7 @@
         </button>
       </nav>
 
-      <section class="status-row">
+      <section class="status-row" data-tauri-drag-region="deep">
         <div class="status-dot" data-state="idle" aria-hidden="true"></div>
         <div class="status-text">
           <p class="label">voice-flow</p>
