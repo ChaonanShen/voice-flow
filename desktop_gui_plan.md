@@ -77,24 +77,38 @@ GUI 提升的目标不是重写核心引擎，而是补齐普通 Windows 用户�
   - 快捷键组合。
   - rewrite 开关。
   - rewrite profile/provider/model/timeout。
+  - rewrite provider key 的保存、清除和保存状态显示。
 - Tauri command 已支持：
   - `get_config`
   - `save_config`
   - `get_rewrite_config`
   - `save_rewrite_config`
   - `start_runtime`
+  - `get_rewrite_key_status`
+  - `save_rewrite_key`
+  - `delete_rewrite_key`
+  - `get_diagnostics`
+  - `get_pause_state`
+  - `set_pause_state`
 - Desktop runtime 已接入 rewrite：
   - rewrite disabled：ASR 原文直接粘贴。
   - rewrite enabled：ASR -> `Rewriting` -> rewrite engine -> 粘贴最终文本。
 - `rewrite-result` event 已接入 GUI，multi variants 使用真实结果，不再使用 mock variants。
+- GUI 已支持：
+  - multi variants 切换、复制和重新粘贴。
+  - fallback 原因和 ASR / rewrite / paste 粗略耗时展示。
+  - Settings 里的 diagnostics 面板。
+  - 托盘打开窗口、暂停 / 恢复、退出。
+  - Floating Input 小圆形麦克风悬浮态。
+  - Voice Pad 最小编辑区入口。
+  - Floating / Voice Pad 右键模式切换菜单。
 
 当前限制：
 
-- API key 输入框还只是 shell，真实 key 仍走环境变量或 `.env`。
-- rewrite / engine key 还没保存到 Windows Credential Manager。
-- multi variants 只展示，点击复制 / 替换 / 重新粘贴闭环还没完成。
-- fallback 原因和 trace 还没有专门 UI，只能通过 settings message / 日志间接看。
-- 还没有托盘图标、暂停开关和退出菜单。
+- Voice Pad 目前只是最小 `textarea` 编辑区，还没有接入 `Result -> Voice Pad` output adapter。
+- Voice Pad 还没有完整展示“Last transcript -> Final text”差异、variants 切换和复制最终结果的工作台形态。
+- runtime output adapter 仍以 Floating Input 自动粘贴链路为主，尚未按模式切换外部粘贴 / 内部插入。
+- rewrite trace 还没有独立事件或完整 trace 面板，目前只展示 fallback 和耗时摘要。
 - 还没有正式打包 installer。
 - 还缺 Windows 实机验收清单和记录。
 
@@ -302,9 +316,12 @@ GUI 应主要监听事件，而不是轮询 runtime：
 | G4.5a.2 | `feat(desktop): add output mode state` | desktop shell 增加 `voice_pad` / `floating_input` 状态和 command/event，不改 core pipeline |
 | G4.5a.3 | `feat(desktop): add desktop mode navigation` | 主窗口增加 Voice Pad / Floating Input / Settings 模式切换 |
 | G4.5a.4 | `feat(desktop): add voice pad editor` | Voice Pad 添加编辑区、last transcript、final text、copy 和 variants 展示 |
+| G4.5a.4a | `feat(desktop): add minimal voice pad pane` | 先提供可编辑 textarea 和可切换目标，后续再接 output adapter 和 variants |
 | G4.5a.5 | `feat(desktop): refine floating input panel` | Floating Input 保留自动粘贴链路，压缩为状态、profile、摘要、fallback 入口 |
 | G4.5a.5a | `feat(desktop): compact floating mic window` | Floating Input 默认显示为小圆形麦克风悬浮窗，设置页按需展开 |
 | G4.5a.5b | `feat(desktop): record from floating mic` | 小麦克风点击开始 / 结束录音，仍复用现有 push-to-talk pipeline |
+| G4.5a.5c | `feat(desktop): simplify floating mic control` | 悬浮态只显示顶部拖拽小横杠和圆形麦克风，状态通过颜色 / 动效反馈 |
+| G4.5a.5d | `feat(desktop): add mode context menu` | Floating / Voice Pad 右键原生菜单切换 Floating / Voice Pad / Settings |
 | G4.5a.6 | `docs(desktop): document dual mode usage` | README 或 GUI 文档补充两种模式说明 |
 
 执行约束：
@@ -327,12 +344,15 @@ GUI 应主要监听事件，而不是轮询 runtime：
 实际进展（2026-05-24）：
 
 - 已完成 G4.5a.3 的第一步：主窗口增加 `Floating Input | Settings` 模式切换，Settings 不再只是临时展开面板。
-- 已完成 G4.5a.5 的第一步：Floating Input 压缩为状态面板，保留状态、profile、输出目标、最近输出、fallback / latency 和 variants 入口。
-- 已完成 G4.5a.5a：Floating Input 默认窗口缩小为 132x132 的透明小圆形麦克风悬浮窗；进入 Settings 时窗口展开到 460x360，返回 Floating Input 时缩回。
-- 已完成悬浮窗拖拽能力：使用 Tauri `data-tauri-drag-region` 和 `core:window:allow-start-dragging`，小窗顶部拖拽条和设置页标题栏可拖动窗口。
+- 已完成 G4.5a.4a：新增最小 Voice Pad pane 和 `textarea` 编辑区，使 Pad 成为真实可切换目标；暂未接入 Result -> Voice Pad 编辑器的 output adapter。
+- 已完成 G4.5a.5 的早期状态面板版本：Floating Input 曾压缩为状态、profile、输出目标、最近输出、fallback / latency 和 variants 入口；该形态随后被更轻的麦克风悬浮态替代。
+- 已完成 G4.5a.5a：Floating Input 默认窗口缩小为 96x106 的透明小圆形麦克风悬浮窗；进入 Voice Pad 时展开到 560x420，进入 Settings 时展开到 460x360，返回 Floating Input 时缩回。
+- 已完成悬浮窗拖拽能力：小窗顶部拖拽条使用 Tauri `data-tauri-drag-region`，麦克风本体只负责点击开始 / 结束录音。
 - 已完成 G4.5a.5b：小麦克风点击开始 / 结束录音，后端只向 runtime 注入 `PushToTalkEvent::Pressed / Released`，ASR、rewrite、clipboard、paste 仍走原有 pipeline；`Alt+Space` 快捷键链路保持可用。
+- 已完成 G4.5a.5c：悬浮态 UI 只保留顶部小横杠和圆形麦克风；录音时红色脉冲，转写 / 改写时蓝色反馈，完成时绿色反馈，错误时红色反馈，不再显示长状态面板。
+- 已完成 G4.5a.5d：Floating Input 和 Voice Pad 中右键弹出 Tauri 原生模式菜单，可以切换到 Floating Input、Voice Pad 或 Settings。
 - Floating Input 悬浮态设置为 non-focusable，目标是减少点击小窗时抢走外部输入框焦点；Settings 模式切回 focusable，保证设置表单可编辑。
-- 暂未引入 Voice Pad，也暂未改变 runtime output adapter；当前自动粘贴链路仍保持 Floating Input 现状。
+- Voice Pad / Settings 模式切回 focusable；当前自动粘贴链路仍保持 Floating Input 现状，尚未实现按模式切换 output adapter。
 
 ### G5：快捷键、粘贴和 Windows 实机兼容
 
