@@ -167,7 +167,8 @@ mod tests {
 
     #[test]
     fn cloud_selection_rejects_blank_api_key() {
-        let err = resolve_engine_selection(EngineKind::Cloud, None, Some("   ".into())).unwrap_err();
+        let err =
+            resolve_engine_selection(EngineKind::Cloud, None, Some("   ".into())).unwrap_err();
         assert!(matches!(err, EngineSelectionError::MissingApiKey));
 
         let err = resolve_engine_selection(EngineKind::Cloud, None, None).unwrap_err();
