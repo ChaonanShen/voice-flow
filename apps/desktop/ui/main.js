@@ -58,6 +58,7 @@ const pasteVariant = document.querySelector("#paste-variant");
 const variantActionStatus = document.querySelector("#variant-action-status");
 const runtimeError = document.querySelector("#runtime-error");
 const runtimeErrorText = document.querySelector("#runtime-error-text");
+const pauseToggle = document.querySelector("#pause-toggle");
 const settingsToggle = document.querySelector("#settings-toggle");
 const settingsPanel = document.querySelector("#settings-panel");
 const settingsMessage = document.querySelector("#settings-message");
@@ -95,11 +96,12 @@ let activeSettingsTab = "input";
 let activeVariant = "clean";
 let rewriteVariants = {};
 let rewriteKeySaved = false;
+let paused = false;
 
 function applyState(event) {
   const state = event?.state ?? "idle";
   dot.dataset.state = state;
-  stateLabel.textContent = labels[state] ?? labels.idle;
+  stateLabel.textContent = paused ? "已暂停" : labels[state] ?? labels.idle;
 
   if (state !== "error") {
     runtimeError.hidden = true;
@@ -120,6 +122,22 @@ function applyState(event) {
     runtimeError.hidden = false;
     runtimeErrorText.textContent = message;
     settingsMessage.textContent = message;
+  }
+}
+
+function applyPauseState(event) {
+  paused = Boolean(event?.paused);
+  pauseToggle.dataset.active = String(paused);
+  pauseToggle.title = paused ? "恢复监听" : "暂停监听";
+  pauseToggle.querySelector("span").textContent = paused ? ">" : "||";
+  if (paused) {
+    dot.dataset.state = "idle";
+    stateLabel.textContent = "已暂停";
+  } else if (stateLabel.textContent === "已暂停") {
+    stateLabel.textContent = labels.idle;
+  }
+  if (activeSettingsTab === "diagnostics") {
+    refreshDiagnosticsPanel();
   }
 }
 
@@ -348,9 +366,11 @@ async function refreshDiagnosticsPanel() {
       ? `${diagnostics.model_dir} (${diagnostics.model_dir_exists ? "存在" : "缺失"})`
       : "未配置";
     diagRuntime.textContent = diagnostics.runtime_running
-      ? diagnostics.restart_requested
-        ? "运行中，等待重载"
-        : "运行中"
+      ? diagnostics.paused
+        ? "已暂停"
+        : diagnostics.restart_requested
+          ? "运行中，等待重载"
+          : "运行中"
       : "未运行";
     diagRewriteKey.textContent = diagnostics.rewrite_key_saved
       ? `${diagnostics.rewrite_provider} 已保存`
@@ -393,6 +413,7 @@ async function boot() {
   }
 
   await listen("realtime-state", (event) => applyState(event.payload));
+  await listen("pause-state", (event) => applyPauseState(event.payload));
   await listen("rewrite-result", (event) => applyRewriteResult(event.payload));
   await listen("runtime-error", (event) => {
     const payload = event.payload;
@@ -409,6 +430,7 @@ async function boot() {
 
   applyConfig(await invoke("get_config"));
   applyRewriteConfig(await invoke("get_rewrite_config"));
+  applyPauseState(await invoke("get_pause_state"));
   await refreshRewriteKeyStatus();
   settingsMessage.textContent = "运行中";
   await invoke("start_runtime");
@@ -416,6 +438,22 @@ async function boot() {
 
 settingsToggle.addEventListener("click", () => {
   settingsPanel.hidden = !settingsPanel.hidden;
+});
+
+pauseToggle.addEventListener("click", async () => {
+  const next = !paused;
+  applyPauseState({ paused: next });
+  if (!invoke) {
+    settingsMessage.textContent = "预览模式";
+    return;
+  }
+  try {
+    const state = await invoke("set_pause_state", { paused: next });
+    applyPauseState(state);
+  } catch (error) {
+    applyPauseState({ paused: !next });
+    settingsMessage.textContent = String(error);
+  }
 });
 
 settingsTabs.forEach((button) => {

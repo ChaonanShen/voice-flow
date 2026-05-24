@@ -43,7 +43,7 @@ select {
 
 .status-row {
   display: grid;
-  grid-template-columns: 16px minmax(0, 1fr) 32px;
+  grid-template-columns: 16px minmax(0, 1fr) 32px 32px;
   gap: 12px;
   align-items: center;
 }
@@ -113,6 +113,12 @@ h1 {
   background: #ffffff;
   color: #243344;
   cursor: pointer;
+}
+
+.icon-button[data-active="true"] {
+  border-color: #f5c26b;
+  background: #fff7e6;
+  color: #8a5a00;
 }
 
 .transcript {

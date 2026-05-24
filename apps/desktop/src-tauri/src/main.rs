@@ -13,7 +13,9 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result};
 use keyring::{Entry, Error as KeyringError};
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, State};
+use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
+use tauri::tray::TrayIconBuilder;
+use tauri::{AppHandle, Emitter, Manager, State, WindowEvent};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 use voice_asr_local::{StreamingZipformer, DEFAULT_STREAMING_ZIPFORMER_DIR, MODEL_DIR_ENV};
 use voice_core::asr::AsrEngine;
@@ -31,6 +33,9 @@ use voice_rewrite::{RewriteError, RewriteProvider, RewriteResult, RewriteTrace};
 const SAMPLE_RATE: u32 = 16_000;
 const CHANNELS: u16 = 1;
 const REWRITE_KEYRING_SERVICE: &str = "voice-flow";
+const TRAY_MENU_OPEN: &str = "voice-flow-open";
+const TRAY_MENU_TOGGLE_PAUSE: &str = "voice-flow-toggle-pause";
+const TRAY_MENU_QUIT: &str = "voice-flow-quit";
 
 #[derive(Clone)]
 struct DesktopState {
@@ -44,6 +49,7 @@ struct RuntimeState {
     config: AppConfig,
     running: bool,
     restart_requested: bool,
+    paused: bool,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -56,6 +62,11 @@ struct ErrorEvent {
 struct PasteFailureEvent {
     text: String,
     error: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct PauseStateEvent {
+    paused: bool,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -102,6 +113,7 @@ struct DiagnosticsEvent {
     model_dir_exists: bool,
     runtime_running: bool,
     restart_requested: bool,
+    paused: bool,
     rewrite_enabled: bool,
     rewrite_provider: RewriteProvider,
     rewrite_key_saved: bool,
@@ -217,6 +229,27 @@ fn get_diagnostics(state: State<'_, DesktopState>) -> Result<DiagnosticsEvent, S
 }
 
 #[tauri::command]
+fn get_pause_state(state: State<'_, DesktopState>) -> PauseStateEvent {
+    pause_state_event(&state.runtime)
+}
+
+#[tauri::command]
+fn set_pause_state(
+    paused: bool,
+    app: AppHandle,
+    state: State<'_, DesktopState>,
+) -> PauseStateEvent {
+    set_runtime_paused(&state.runtime, paused);
+    append_log(if paused {
+        "listener paused"
+    } else {
+        "listener resumed"
+    });
+    emit_pause_state(&app, paused);
+    PauseStateEvent { paused }
+}
+
+#[tauri::command]
 fn copy_text(text: String) -> Result<(), String> {
     if text.trim().is_empty() {
         return Err("copy text cannot be empty".to_string());
@@ -277,6 +310,7 @@ fn main() {
             config,
             running: false,
             restart_requested: false,
+            paused: false,
         })),
     };
 
@@ -292,15 +326,20 @@ fn main() {
             save_rewrite_key,
             delete_rewrite_key,
             get_diagnostics,
+            get_pause_state,
+            set_pause_state,
             copy_text,
             paste_text,
             start_runtime
         ])
         .setup(|app| {
+            setup_tray(app)?;
+            setup_close_to_tray(app);
             app.emit(
                 "realtime-state",
                 RealtimeStateEvent::new(RealtimeState::Idle),
             )?;
+            app.emit("pause-state", PauseStateEvent { paused: false })?;
             Ok(())
         })
         .run(tauri::generate_context!())
@@ -319,6 +358,64 @@ fn runtime_loop(app: AppHandle, runtime: RuntimeHandle) {
             emit_error(&app, err);
             thread::sleep(Duration::from_secs(1));
         }
+    }
+}
+
+fn setup_tray(app: &mut tauri::App) -> tauri::Result<()> {
+    let open = MenuItem::with_id(app, TRAY_MENU_OPEN, "打开窗口", true, None::<&str>)?;
+    let toggle_pause = MenuItem::with_id(
+        app,
+        TRAY_MENU_TOGGLE_PAUSE,
+        "暂停/恢复监听",
+        true,
+        None::<&str>,
+    )?;
+    let separator = PredefinedMenuItem::separator(app)?;
+    let quit = MenuItem::with_id(app, TRAY_MENU_QUIT, "退出", true, None::<&str>)?;
+    let menu = Menu::with_items(app, &[&open, &toggle_pause, &separator, &quit])?;
+    let runtime = app.state::<DesktopState>().runtime.clone();
+
+    TrayIconBuilder::new()
+        .tooltip("voice-flow")
+        .icon(tauri::include_image!("./icons/icon.ico"))
+        .menu(&menu)
+        .show_menu_on_left_click(true)
+        .on_menu_event(move |app, event| match event.id().as_ref() {
+            TRAY_MENU_OPEN => open_main_window(app),
+            TRAY_MENU_TOGGLE_PAUSE => {
+                let paused = toggle_runtime_paused(&runtime);
+                append_log(if paused {
+                    "listener paused from tray"
+                } else {
+                    "listener resumed from tray"
+                });
+                emit_pause_state(app, paused);
+            }
+            TRAY_MENU_QUIT => app.exit(0),
+            _ => {}
+        })
+        .build(app)?;
+
+    Ok(())
+}
+
+fn setup_close_to_tray(app: &mut tauri::App) {
+    let Some(window) = app.get_webview_window("main") else {
+        return;
+    };
+    let window_to_hide = window.clone();
+    window.on_window_event(move |event| {
+        if let WindowEvent::CloseRequested { api, .. } = event {
+            api.prevent_close();
+            let _ = window_to_hide.hide();
+        }
+    });
+}
+
+fn open_main_window(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.set_focus();
     }
 }
 
@@ -347,6 +444,17 @@ fn run_runtime_session(app: &AppHandle, runtime: &RuntimeHandle, config: AppConf
         }
 
         recorder.poll_audio();
+        if is_paused(runtime) {
+            if recorder.is_recording() {
+                let _ = recorder.handle_hotkey_event(PushToTalkEvent::Released);
+                append_log("recording cancelled because listener paused");
+                emit_state(app, RealtimeStateEvent::new(RealtimeState::Idle));
+            }
+            drain_hotkey_events(&hotkey)?;
+            thread::sleep(Duration::from_millis(20));
+            continue;
+        }
+
         if let Some(event) = hotkey.try_recv().context("failed to read hotkey event")? {
             match recorder
                 .handle_hotkey_event(event)
@@ -404,6 +512,11 @@ fn run_runtime_session(app: &AppHandle, runtime: &RuntimeHandle, config: AppConf
 
         thread::sleep(Duration::from_millis(20));
     }
+}
+
+fn drain_hotkey_events(hotkey: &DesktopHotkey) -> Result<()> {
+    while hotkey.try_recv()?.is_some() {}
+    Ok(())
 }
 
 struct DesktopHotkey {
@@ -478,6 +591,7 @@ fn diagnostics_event(state: &State<'_, DesktopState>) -> Result<DiagnosticsEvent
         model_dir_exists,
         runtime_running: runtime.running,
         restart_requested: runtime.restart_requested,
+        paused: runtime.paused,
         rewrite_enabled: runtime.config.rewrite.enabled,
         rewrite_provider: runtime.config.rewrite.provider,
         rewrite_key_saved,
@@ -570,8 +684,32 @@ fn take_restart(runtime: &RuntimeHandle) -> bool {
     }
 }
 
+fn pause_state_event(runtime: &RuntimeHandle) -> PauseStateEvent {
+    PauseStateEvent {
+        paused: is_paused(runtime),
+    }
+}
+
+fn is_paused(runtime: &RuntimeHandle) -> bool {
+    runtime.lock().expect("runtime mutex poisoned").paused
+}
+
+fn set_runtime_paused(runtime: &RuntimeHandle, paused: bool) {
+    runtime.lock().expect("runtime mutex poisoned").paused = paused;
+}
+
+fn toggle_runtime_paused(runtime: &RuntimeHandle) -> bool {
+    let mut guard = runtime.lock().expect("runtime mutex poisoned");
+    guard.paused = !guard.paused;
+    guard.paused
+}
+
 fn emit_state(app: &AppHandle, event: RealtimeStateEvent) {
     let _ = app.emit("realtime-state", event);
+}
+
+fn emit_pause_state(app: &AppHandle, paused: bool) {
+    let _ = app.emit("pause-state", PauseStateEvent { paused });
 }
 
 fn emit_rewrite_result(app: &AppHandle, result: &RewriteResult, timings: TimingEvent) {
