@@ -130,10 +130,11 @@ const NativeMenu = window.__TAURI__?.menu?.Menu;
 const NativeMenuItem = window.__TAURI__?.menu?.MenuItem;
 const appWindow = window.__TAURI__?.window?.getCurrentWindow?.();
 const LogicalSize = window.__TAURI__?.dpi?.LogicalSize;
+/* 悬浮窗页面/文稿页面/设置页面的尺寸 */
 const windowSizes = {
-  floating: { width: 108, height: 118 },
-  "voice-pad": { width: 560, height: 420 },
-  settings: { width: 460, height: 360 },
+  floating: { width: 110, height: 110 },
+  "voice-pad": { width: 560, height: 600 },
+  settings: { width: 520, height: 400 },
 };
 const contentModes = new Set(["floating", "voice-pad"]);
 const store = {
