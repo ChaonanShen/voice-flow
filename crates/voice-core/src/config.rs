@@ -38,7 +38,7 @@ pub struct HotkeyConfig {
 impl Default for HotkeyConfig {
     fn default() -> Self {
         Self {
-            ctrl: true,
+            ctrl: false,
             alt: true,
             shift: false,
             logo: false,
@@ -160,12 +160,12 @@ mod tests {
     fn defaults_match_windows_first_hotkey() {
         let config = AppConfig::default();
         assert_eq!(config.model_dir, None);
-        assert_eq!(config.hotkey.ctrl, true);
+        assert_eq!(config.hotkey.ctrl, false);
         assert_eq!(config.hotkey.alt, true);
         assert_eq!(config.hotkey.shift, false);
         assert_eq!(config.hotkey.logo, false);
         assert_eq!(config.hotkey.key, "Space");
-        assert_eq!(config.hotkey.to_label(), "Ctrl+Alt+Space");
+        assert_eq!(config.hotkey.to_label(), "Alt+Space");
         assert_eq!(config.rewrite, RewriteConfig::default());
     }
 

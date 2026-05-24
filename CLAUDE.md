@@ -32,7 +32,7 @@
 ## 测试 / 验收
 
 - `cargo test --workspace` 跑 voice-core / voice-asr-local 的纯逻辑测试，**不覆盖桌面链路**。
-- 桌面端验收必须在 Windows 上人工跑：启动 `apps/desktop/src-tauri` → 按住 `Ctrl+Alt+Space` → 松开后看悬浮窗"最近文本"更新且粘贴生效。
+- 桌面端验收必须在 Windows 上人工跑：启动 `apps/desktop/src-tauri` → 按住 `Alt+Space` → 松开后看悬浮窗"最近文本"更新且粘贴生效。
 - 主分支必须保持可运行：每个 PR 合并后评委可任意时间检出能跑（见 plan.md §6）。
 
 ## 配置

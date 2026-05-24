@@ -33,7 +33,7 @@
    1. 在 apps/desktop/src-tauri 运行 cargo run
    2. 窗口显示待机
    3. 在 VS Code 输入框聚焦
-   4. 按住 Ctrl+Alt+Space 说话
+   4. 按住 Alt+Space 说话
    5. 松开快捷键
    6. 期望自动粘贴，实际只更新了最近文本
    ```

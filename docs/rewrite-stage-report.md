@@ -122,7 +122,7 @@ cargo run --manifest-path apps/desktop/src-tauri/Cargo.toml
 GUI 默认快捷键：
 
 ```text
-Ctrl + Alt + Space
+Alt + Space
 ```
 
 按住说话，松开后转写、可选改写并粘贴到当前焦点输入框。

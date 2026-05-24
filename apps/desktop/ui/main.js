@@ -34,7 +34,7 @@ const providerDefaults = {
 const configDefaults = {
   model_dir: null,
   hotkey: {
-    ctrl: true,
+    ctrl: false,
     alt: true,
     shift: false,
     logo: false,

@@ -11,7 +11,7 @@ use global_hotkey::{
 use crate::config::HotkeyConfig;
 
 /// Default push-to-talk shortcut used by the minimal realtime loop.
-pub const PUSH_TO_TALK_HOTKEY_LABEL: &str = "Ctrl+Alt+Space";
+pub const PUSH_TO_TALK_HOTKEY_LABEL: &str = "Alt+Space";
 
 /// A push-to-talk hotkey event.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -36,7 +36,7 @@ pub struct PushToTalkHotkey {
 }
 
 impl PushToTalkHotkey {
-    /// Register `Ctrl+Alt+Space` and start receiving events through
+    /// Register `Alt+Space` and start receiving events through
     /// [`Self::try_recv`].
     pub fn register_default() -> Result<Self, HotkeyError> {
         Self::register(HotkeyConfig::default())
@@ -85,7 +85,7 @@ pub enum HotkeyError {
 }
 
 pub fn default_push_to_talk_hotkey() -> HotKey {
-    HotKey::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::Space)
+    HotKey::new(Some(Modifiers::ALT), Code::Space)
 }
 
 pub fn hotkey_from_config(config: &HotkeyConfig) -> Result<HotKey, HotkeyError> {
@@ -115,20 +115,20 @@ mod tests {
     use super::*;
 
     #[test]
-    fn default_hotkey_is_ctrl_alt_space() {
+    fn default_hotkey_is_alt_space() {
         let hotkey = default_push_to_talk_hotkey();
 
-        assert!(hotkey.mods.contains(Modifiers::CONTROL));
+        assert!(!hotkey.mods.contains(Modifiers::CONTROL));
         assert!(hotkey.mods.contains(Modifiers::ALT));
         assert_eq!(hotkey.key, Code::Space);
-        assert_eq!(PUSH_TO_TALK_HOTKEY_LABEL, "Ctrl+Alt+Space");
+        assert_eq!(PUSH_TO_TALK_HOTKEY_LABEL, "Alt+Space");
     }
 
     #[test]
     fn default_config_builds_default_hotkey() {
         let hotkey = hotkey_from_config(&HotkeyConfig::default()).unwrap();
 
-        assert!(hotkey.mods.contains(Modifiers::CONTROL));
+        assert!(!hotkey.mods.contains(Modifiers::CONTROL));
         assert!(hotkey.mods.contains(Modifiers::ALT));
         assert_eq!(hotkey.key, Code::Space);
     }

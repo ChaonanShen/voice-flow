@@ -744,13 +744,40 @@ fn emit_paste_failure(app: &AppHandle, text: String, error: String) {
 }
 
 fn load_config() -> AppConfig {
-    match AppConfig::read_from(config_path()) {
-        Ok(config) => with_default_model_dir(config),
-        Err(_) => {
-            let config = with_default_model_dir(AppConfig::default());
-            let _ = config.write_to(config_path());
+    let path = config_path();
+    match AppConfig::read_from(&path) {
+        Ok(config) => {
+            let (config, migrated) = migrate_config_defaults(config);
+            let config = with_default_model_dir(config);
+            if migrated {
+                let _ = config.write_to(&path);
+            }
             config
         }
+        Err(_) => {
+            let config = with_default_model_dir(AppConfig::default());
+            let _ = config.write_to(&path);
+            config
+        }
+    }
+}
+
+fn migrate_config_defaults(mut config: AppConfig) -> (AppConfig, bool) {
+    if config.hotkey == legacy_default_hotkey() {
+        config.hotkey = HotkeyConfig::default();
+        return (config, true);
+    }
+
+    (config, false)
+}
+
+fn legacy_default_hotkey() -> HotkeyConfig {
+    HotkeyConfig {
+        ctrl: true,
+        alt: true,
+        shift: false,
+        logo: false,
+        key: "Space".to_string(),
     }
 }
 
