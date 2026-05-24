@@ -824,7 +824,7 @@ ASR 原始文本
 | R1.1 `chore(rewrite): scaffold voice-rewrite crate` | (a) `chore(rewrite): create empty crate + workspace registry` <br> (b) `chore(rewrite): add cargo dependencies` <br> (c) `feat(rewrite): define error types` |
 | R1.6 `feat(rewrite): openai-compat http client` | (a) `feat(rewrite): define LlmClient trait + ChatRequest/Response types` <br> (b) `feat(rewrite): implement reqwest-based OpenAiCompatClient (no retry)` <br> (c) `feat(rewrite): add timeout handling to OpenAiCompatClient` <br> (d) `feat(rewrite): add 1-shot retry on 5xx` |
 | R1.8 `feat(rewrite): llm pipeline with clean profile` | (a) `feat(rewrite): add clean profile system prompt constant` <br> (b) `feat(rewrite): implement LlmPipeline::process happy path` <br> (c) `feat(rewrite): add fallback-to-original on llm error` <br> (d) `test(rewrite): integration tests with MockLlmClient (10 cases)` |
-| R2.12 `feat(desktop): rewrite settings panel` | (a) `feat(desktop): provider dropdown + persistence` <br> (b) `feat(desktop): model textbox + persistence` <br> (c) `feat(desktop): profile dropdown + persistence` <br> (d) `feat(desktop): api key textboxes (one per provider)` |
+| R2.12 `feat(desktop): rewrite settings web ui` | (a) `feat(desktop): rewrite settings mock view` <br> (b) `feat(desktop): rewrite profile controls` <br> (c) `feat(desktop): provider and model controls` <br> (d) `feat(desktop): api key form shell` |
 
 **取舍原则**：
 - 一个 PR 一个动词，能用 "add X" / "implement Y" / "wire Z" 一句话讲清就行
@@ -834,6 +834,18 @@ ASR 原始文本
 - **PR 编号是给计划用的，git 里的实际 commit / PR 不必严格 R1.6.a/b/c 这样编**——动词清楚 + 单一职责就够了
 
 下面表格里如果某一行的"单一职责"列写了 "X + Y" 或多动词，那基本就是"还可以再拆"的信号。
+
+### 9.0.1 GUI 执行顺序（Tauri 内 Web UI 优先）
+
+GUI 不另起独立 browser app。当前桌面端已经是 Tauri，前端就是 Web 技术栈；真正需要后置验证的是 Tauri bridge 和 Windows 平台能力。因此 GUI 按三段推进：
+
+| 阶段 | 做什么 | 验证方式 |
+|---|---|---|
+| G1 Web 化 UI | 在 `apps/desktop/ui` 里用 mock/config snapshot 实现设置面板、profile 控件、状态视图、multi tabs | 浏览器/Tauri WebView 截图、静态交互检查；不需要 keyring、麦克风、真实 LLM |
+| G2 Tauri bridge | 用 Tauri command/event 把 mock 数据换成 `app.toml`、runtime state、rewrite trace | Rust 单测 + Tauri command smoke；仍尽量少依赖 Windows 实机 |
+| G3 Windows 实机 | keyring、全局快捷键、悬浮窗置顶/焦点、剪贴板/粘贴、真实录音和真实 LLM | Windows 手测 checklist 和 demo |
+
+这样保留 Web UI 的开发速度，但不产生一个之后要丢弃的独立浏览器版本。
 
 ### 9.1 Day 1：跑通最小链路（rewrite=clean，DeepSeek）
 
@@ -879,11 +891,12 @@ ASR 原始文本
 | R2.9 | `feat(rewrite): dashscope provider impl` | 复用 R1.6 client，base_url 切 `compatible-mode/v1`，默认 model `qwen-plus` |
 | R2.10 | `feat(rewrite): openai provider impl` | 复用 R1.6 client，OpenAI 官方 base_url + 默认 model（待定，Day 2 时按当前发布版填） |
 | R2.11 | `feat(core): config schema for rewrite section` | `app.toml [rewrite]` 读写 + 单测 |
-| R2.12 | `feat(desktop): rewrite settings panel` | 开关 + Provider 下拉 + Model 输入 + Profile 下拉 + 各 provider 的 API key 输入（**建议拆成 4 个 PR，见 §9.0**） |
-| R2.13 | `feat(desktop): secure api key with keyring` | Windows Credential Manager 存储，每个 provider 一个 entry |
-| R2.14 | `feat(desktop): show current profile in floating window` | 悬浮窗显示当前档 |
-| R2.15 | `feat(desktop): render Rewriting state` | "改写中..." UI |
-| R2.16 | `feat(desktop): multi-version variant tabs` | multi 档启用时，悬浮窗显示 4 个标签可切换复制 |
+| R2.12 | `feat(desktop): rewrite settings web ui` | G1：在 Tauri 前端用 mock 数据做开关、Profile、Provider、Model、API key form shell |
+| R2.13 | `feat(desktop): wire rewrite settings commands` | G2：Tauri command 读写 `app.toml [rewrite]`，替换 mock 数据 |
+| R2.14 | `feat(desktop): secure rewrite keys with keyring` | G3：Windows Credential Manager 存储每个 provider 的 key |
+| R2.15 | `feat(desktop): show current rewrite profile` | G1/G2：悬浮窗显示当前档，先 mock，后接 runtime/config |
+| R2.16 | `feat(desktop): render rewriting state` | G1/G2：渲染 "改写中..." 状态，先 mock state，后接 `RealtimeState::Rewriting` event |
+| R2.17 | `feat(desktop): multi-version variant tabs` | G1/G2：multi 档显示 4 个标签，先 mock variants，后接 `RewriteResult::variants` |
 
 **Day 2 验收**：
 - Windows 上：选 email 档说话 → 松开 → 粘贴出邮件正文
@@ -896,7 +909,7 @@ ASR 原始文本
 - R2.1~R2.8 已完成：`polish` / `email` / `wechat` / `commit` / `bullets` / `prompt` / `multi` profiles、语音命令识别、multi JSON 解析和 mock 覆盖都已落地。
 - R2.9~R2.10 已完成到 provider 层：DeepSeek / DashScope / OpenAI 共用 `OpenAiCompatClient`，CLI 暴露 `--provider` / `--rewrite-provider`。
 - R2.11 已完成：`app.toml [rewrite]` schema、默认关闭策略、用户词典、provider/model/profile/timeout 读写，以及 `voice-core::text_pipeline` 非 GUI glue。
-- R2.12~R2.16 属于桌面设置、keyring、悬浮窗和 multi 标签 UI，按"先把 rewrite 引擎做好，GUI 最后做"后置。
+- R2.12~R2.17 属于 GUI：按 G1 Web 化 UI → G2 Tauri bridge → G3 Windows 实机顺序后置；不单独做 browser app。
 
 ### 9.3 Day 3：包装、demo、收尾
 
@@ -904,10 +917,10 @@ ASR 原始文本
 |---|---|---|
 | R3.1 | `feat(rewrite): post-process length sanity check` | 异常压缩兜底原文（覆盖 L1~L4） |
 | R3.2 | `feat(rewrite): preserve numbers and proper nouns guard` | 数字 / 英文专有名词丢失检测（覆盖 N1~N4） |
-| R3.3 | `feat(desktop): latency breakdown display` | UI 显示 ASR / 改写 / 粘贴各段耗时（读 `RewriteTrace`） |
-| R3.4 | `feat(desktop): rewrite pipeline trace overlay` | 悬浮窗显示"预处理→命令→改写"流程链 |
-| R3.5 | `feat(core): hot reload rewrite settings` | 设置改完不用重启就生效（复用现有 restart_requested） |
-| R3.6 | `feat(desktop): custom profile system prompt editor` | 设置里多行文本框 |
+| R3.3 | `feat(desktop): latency breakdown web ui` | G1/G2：先用 mock trace 显示 ASR / 改写 / 粘贴耗时，再接 `RewriteTrace` |
+| R3.4 | `feat(desktop): rewrite trace overlay` | G1/G2：先用 mock 流程显示"预处理→命令→改写"，再接真实 trace |
+| R3.5 | `feat(core): hot reload rewrite settings` | G2/G3：设置改完不用重启就生效（复用现有 restart_requested） |
+| R3.6 | `feat(desktop): custom profile prompt editor` | G1/G2：设置里多行文本框，先前端编辑态，再接持久化 |
 | R3.7 | `docs: ai rewrite usage guide` | README 加章节 + 截图 |
 | R3.8 | `docs: demo script for ai rewrite` | `docs/demo-rewrite.md` 演示步骤 |
 | R3.9 | `chore: fixtures for ai rewrite demo` | 一段固定 WAV + 期望输出，让评委可复现 |
@@ -921,7 +934,7 @@ ASR 原始文本
 
 - R3.1~R3.2 已完成：过短输出、数字丢失、英文专有名词丢失都会触发原文兜底。
 - R3.7~R3.8 已完成到非 GUI 文档层：README 增加 AI 改写使用指南，`docs/demo-rewrite.md` 提供纯文本、真实 LLM smoke 和 WAV-to-rewrite 命令。
-- R3.3~R3.6 仍后置：它们依赖桌面 UI / 设置热更新，不在当前非 GUI rewrite 引擎阶段推进。
+- R3.3~R3.6 仍后置：它们依赖 GUI / 设置热更新，执行时按 G1 Web 化 UI → G2 Tauri bridge → G3 Windows 实机推进。
 - R3.9 单独处理：只在能生成并验证可识别的固定 WAV 时提交 fixture，避免把无效音频放进 demo。
 
 ### 9.4 节奏与删减
@@ -999,8 +1012,8 @@ keyring 里**每个 provider 单独一个 entry**：
 | 1 | R3.6 custom profile 编辑器 | 编辑 TOML 即可 |
 | 2 | R3.4 trace overlay / R3.3 延迟显示 | demo 解说时口播 |
 | 3 | R3.2 数字 / 专有名词保护 | 不致命，但 demo 时小心选词 |
-| 4 | R2.16 multi-version 多标签 UI | 退化成 multi 档输出 JSON 到悬浮窗"最近文本"区，能看就行 |
-| 5 | R2.13 keyring | 退化成只用 env / `.env`（已 gitignore，开发够用） |
+| 4 | R2.17 multi-version 多标签 UI | 退化成 multi 档输出 JSON 到悬浮窗"最近文本"区，能看就行 |
+| 5 | R2.14 keyring | 退化成只用 env / `.env`（已 gitignore，开发够用） |
 | 6 | R2.9 / R2.10 DashScope / OpenAI provider | 退化成只有 DeepSeek 一家 |
 | 7 | R2.7 语音命令识别 | 退化成仅靠 Profile 下拉 |
 | 8 | R2.8 multi 档 | 退化成只有 clean / polish / email 三档 |

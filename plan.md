@@ -15,6 +15,7 @@
 
 - **Linux 只作为开发与核心逻辑验证环境**：当前机器用于写 Rust core / ASR / CLI、跑纯逻辑测试、跑文件回放与模型转写验证；不在 Linux 上安装或调试桌面外壳依赖，也不把 Linux 桌面可用性作为近期目标。
 - **Windows 是桌面产品验收目标**：全局快捷键、麦克风、剪贴板、模拟粘贴、Tauri 悬浮窗和设置面板都以 Windows 原生环境为准；Step 5 之后尽快切到 Windows 上实测和继续开发。
+- **GUI 实现顺序 = Tauri 内 Web UI 优先**：不单独做一个浏览器 Web app。先在 `apps/desktop/ui` 里按普通 Web 前端方式实现设置面板、状态视图和 mock 数据；再接 Tauri command/event；最后处理 Windows 实机快捷键、悬浮窗、keyring、粘贴等平台细节。
 - **架构保留多端余地**：核心仍保持平台无关，把录音源、ASR 引擎、状态事件、文本输出、配置存储抽象清楚。Windows 桌面、未来手机端或 Web 插件都只做 adapter，不复制核心链路。
 - **移动端 / Web 插件后置探索**：如果后续要做手机端或浏览器插件，优先复用同一套"录音 → ASR → 文本处理 → 插入目标"核心模型；当前不为它们提前引入运行时或依赖。
 
@@ -268,13 +269,15 @@ voice-flow/
 
 ### Step 9：引擎相关设置
 
-**目标**：把 Step 8 的引擎选择和云端 API key 接入桌面设置面板。
+**目标**：把 Step 8 的引擎选择和云端 API key 接入桌面设置面板。GUI 先按 Tauri 内 Web UI 做：前端用 mock/config snapshot 跑通控件和状态，再接 Tauri command/event，最后做 Windows keyring 与实机验证。
 
 | PR | 标题 | 单一职责 |
 |---|---|---|
-| 9.1 | `feat(desktop): persist asr engine choice` | local / cloud 选择持久化 |
-| 9.2 | `feat(desktop): api key settings` | API key 录入 + 安全存储（系统 keyring 或加密文件） |
-| 9.3 | `feat(desktop): show current engine` | 悬浮窗显示当前引擎和状态（待机/网络异常等） |
+| 9.1 | `feat(desktop): engine settings web ui` | 在 Tauri 前端里用 mock 数据实现 local / cloud 控件，不接 Rust |
+| 9.2 | `feat(desktop): load and save engine settings` | Tauri command 读写 `app.toml`，替换 mock 数据 |
+| 9.3 | `feat(desktop): api key form shell` | API key 输入、mask、清除交互先在前端跑通，不落盘明文 |
+| 9.4 | `feat(desktop): secure cloud api key with keyring` | Windows keyring 存储云端 ASR key |
+| 9.5 | `feat(desktop): show current engine` | 悬浮窗显示当前引擎和状态（待机/网络异常等） |
 
 **Step 验收**：重启后引擎选择和 key 持久化；切换引擎无需重启进程。
 
@@ -301,7 +304,7 @@ voice-flow/
 - **非 GUI rewrite 引擎已完成主链路**：`voice-rewrite` crate、预处理、用户词典、语音命令识别、多 profile、multi JSON 输出、postprocess 兜底、DeepSeek / DashScope / OpenAI provider 都已落地。
 - **core / CLI 接线已完成**：`app.toml [rewrite]` schema、`voice-core::text_pipeline`、`voice-cli rewrite`、`voice-cli transcribe --rewrite`、`voice-cli push-to-talk-transcribe --rewrite` 均可用；不开 rewrite 时默认链路仍等价于 ASR 原文。
 - **文档与 demo 已完成非 GUI 部分**：README 增加 AI 改写使用指南，`docs/demo-rewrite.md` 增加演示步骤，`docs/fixtures/demo-rewrite.wav` 提供固定 16 kHz mono WAV fixture。
-- **后置项**：桌面设置面板、keyring、悬浮窗 profile 显示、multi 版本标签、热更新和 trace overlay 按“GUI 最后做”后置。
+- **GUI 后置执行策略**：先在 Tauri 前端按 Web UI/mock 数据做 rewrite 设置面板、profile 状态和 multi tabs；再接 Tauri command/event；最后做 Windows keyring、悬浮窗焦点和实机验收。不另起独立 browser app。
 
 **当前验收命令**：
 
@@ -419,6 +422,7 @@ PR 描述空白或与代码变更严重不符 = **无效作品**（见 §2.2）�
 | Linux Tauri / WebKit / DBus 等系统依赖拖慢进度 | Linux 不安装或调试桌面外壳依赖；桌面壳在 Windows 环境开发和验证 |
 | 端侧首字延迟过高 | INT8 量化模型 + 调小 chunk size；中端机实测后定型 |
 | Tauri 学习曲线 | Windows-first 悬浮窗极简，逻辑全在 Rust，前端只用静态 HTML+少 JS |
+| GUI 细节拖慢 rewrite 引擎收尾 | 不做独立 Web app；先在 Tauri 前端用 mock 数据开发 Web 化 UI，确认交互后再接 Rust/Tauri 和 Windows 实机能力 |
 | 手机端 / Web 插件路线不确定 | 不提前引入运行时；先把 core 状态事件、配置和文本输出抽象清楚，后续再做 adapter |
 | 模型/数据体积 | gitignore，README 写下载脚本 |
 | 云端 API key 泄漏（Step 8/10 启动后） | `.env` 文件 + .gitignore；桌面端 key 用系统 keyring 存储，不写明文 TOML |
@@ -448,7 +452,7 @@ PR 描述空白或与代码变更严重不符 = **无效作品**（见 §2.2）�
 2. **Windows 手测环境**：需要可运行 Windows 桌面的机器，提前准备 Rust toolchain、sherpa-onnx 静态库 archive、模型目录；外网下载由用户手动提供文件
 3. **云端 ASR 厂商**：Step 8 之前确定。备选**阿里云 DashScope（Paraformer-realtime-v2）**——免费额度大、与端侧 Zipformer 同源、文档清楚。当前 Step 1-7 不阻塞
 6. **AI 改写设计**：见 §十三 草稿，等用户敲定改写档清单、目标 LLM、prompt 形态后才能拆 Step 10 的 PR
-4. **Windows 开发切换时机**：Step 5 实机验收后，桌面外壳和设置面板优先直接在 Windows 上继续开发；Linux 保留为 core / CLI 纯逻辑验证环境
+4. **GUI 开发切换时机**：设置面板和 rewrite UI 先在 Tauri 的 Web 前端里用 mock 数据开发和截图验证；涉及 keyring、全局快捷键、悬浮窗、粘贴的部分再切到 Windows 原生环境实测。Linux 保留为 core / CLI 纯逻辑验证环境
 5. **手机端 / Web 插件形态**：只作为后续探索方向。当前先保证 core 事件、配置和输出接口不和 Windows 桌面强耦合
 
 ## 十二、测试策略
