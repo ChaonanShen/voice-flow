@@ -108,7 +108,8 @@ GUI 提升的目标不是重写核心引擎，而是补齐普通 Windows 用户�
 - 文稿模式目前恢复为早期主面板形态，但还没有接入 `Result -> 文稿编辑区` output adapter。
 - 文稿模式还没有真正的可编辑最终文稿区，也没有完整展示“Last transcript -> Final text”差异。
 - runtime output adapter 仍以悬浮窗模式自动粘贴链路为主，尚未按模式切换外部粘贴 / 内部插入。
-- rewrite trace 还没有独立事件或完整 trace 面板，目前只展示 fallback 和耗时摘要。
+- `rewrite-result` event 已携带 trace 数据，但 GUI 还没有完整 trace overlay，目前只展示 fallback 和耗时摘要。
+- 日志文件已写入本地，但 GUI 还没有打开日志目录入口。
 - 还没有正式打包 installer。
 - 还缺 Windows 实机验收清单和记录。
 
@@ -241,63 +242,61 @@ GUI 应主要监听事件，而不是轮询 runtime：
 - 禁用状态和加载状态补齐。
 - profile/provider/model 的非法组合提示。
 
-### G2：安全密钥和 rewrite 结果操作
+### G2：安全密钥和 rewrite 结果操作（已完成）
 
 目标：让用户不需要命令行环境变量也能使用真实 LLM，并把 multi 结果操作闭环。
 
-建议 PR：
+实际状态：
 
-| PR | 标题 | 单一职责 |
+| PR | 标题 | 状态 |
 |---|---|---|
-| G2.1 | `feat(desktop): add rewrite keyring commands` | Tauri 后端增加 provider key 的 get/save/delete command |
-| G2.2 | `feat(desktop): store rewrite keys in credential manager` | Windows Credential Manager 持久化 DeepSeek/DashScope/OpenAI key |
-| G2.3 | `feat(desktop): load rewrite keys for runtime` | runtime 构建 rewrite engine 时优先读 keyring |
-| G2.4 | `feat(desktop): show rewrite key status` | GUI 显示 key 是否已保存，不回显明文 |
-| G2.5 | `feat(desktop): copy rewrite variants` | multi tab 支持复制选中版本到剪贴板 |
-| G2.6 | `feat(desktop): paste selected rewrite variant` | multi tab 支持重新粘贴选中版本 |
+| G2.1 | `feat(desktop): add rewrite keyring commands` | 已完成：Tauri command 支持 `get_rewrite_key_status` / `save_rewrite_key` / `delete_rewrite_key` |
+| G2.2 | `feat(desktop): store rewrite keys in credential manager` | 已完成：桌面端通过 `keyring` 的 Windows native backend 存储 provider key |
+| G2.3 | `feat(desktop): load rewrite keys for runtime` | 已完成：runtime 构建 rewrite engine 时优先读取 keyring |
+| G2.4 | `feat(desktop): show rewrite key status` | 已完成：Settings 显示当前 provider key 是否已保存，不回显明文 |
+| G2.5 | `feat(desktop): copy rewrite variants` | 已完成：multi tab 可复制选中版本 |
+| G2.6 | `feat(desktop): paste selected rewrite variant` | 已完成：multi tab 可重新粘贴选中版本 |
 
-验收：
+剩余验收：
 
-- 不设置环境变量，只在 GUI 保存 DeepSeek key，重启后 clean rewrite 可用。
-- 清除 key 后，rewrite fallback，不影响 ASR 原文粘贴。
-- multi 档返回 variants 后，点击任一 tab 可以复制或粘贴该版本。
+- Windows 实机记录一次：不设置环境变量，只在 GUI 保存 DeepSeek key，重启后 clean rewrite 可用。
+- Windows 实机记录一次：清除 key 后 rewrite fallback，不影响 ASR 原文粘贴。
 
-### G3：错误、fallback、trace 和 latency
+### G3：错误、fallback、trace 和 latency（基础能力已完成）
 
 目标：用户知道系统这次做了什么、为什么 fallback、慢在哪里。
 
-建议 PR：
+实际状态：
 
-| PR | 标题 | 单一职责 |
+| PR | 标题 | 状态 |
 |---|---|---|
-| G3.1 | `feat(desktop): emit rewrite trace events` | 后端把 `RewriteTrace` 转为 GUI event |
-| G3.2 | `feat(desktop): show rewrite fallback reason` | GUI 显示缺 key、超时、JSON 解析失败、后处理拒绝等原因 |
-| G3.3 | `feat(desktop): show latency breakdown` | 显示 ASR / rewrite / paste 粗略耗时 |
-| G3.4 | `feat(desktop): add diagnostics panel` | 设置里增加诊断面板：模型目录、key 状态、runtime 状态 |
-| G3.5 | `chore(desktop): write runtime logs` | 写本地日志文件，方便定位用户机器问题 |
+| G3.1 | `feat(desktop): emit rewrite trace events` | 部分完成：`rewrite-result` payload 已携带 `RewriteTrace`；尚未拆独立 `rewrite-trace` event / overlay |
+| G3.2 | `feat(desktop): show rewrite fallback reason` | 已完成：文稿模式展示 fallback reason |
+| G3.3 | `feat(desktop): show latency breakdown` | 已完成：文稿模式展示 ASR / rewrite / paste 粗略耗时 |
+| G3.4 | `feat(desktop): add diagnostics panel` | 已完成：Settings 诊断页显示 config path、log path、模型目录、runtime、rewrite key 状态 |
+| G3.5 | `chore(desktop): write runtime logs` | 已完成：desktop runtime 写本地 `desktop.log` |
 
-验收：
+后续小项：
 
-- 断网或错误 key 时，GUI 明确显示 rewrite fallback，但仍粘贴可用文本。
-- multi JSON 非法时，GUI 显示 fallback 原因。
-- 一次录音完成后能看到 ASR 和 rewrite 耗时。
-- 可从 GUI 打开日志目录。
+- 增加 trace overlay，展示 preprocess / voice command / LLM / postprocess 关键阶段。
+- 增加“打开日志目录”按钮。
+- 把断网、错误 key、multi JSON 非法等 fallback 场景写入 Windows 手测记录。
 
-### G4：Windows 常驻体验
+### G4：Windows 常驻体验（已完成基础常驻形态）
 
 目标：让应用像 Windows 常驻输入工具，而不是一个开发窗口。
 
-建议 PR：
+实际状态：
 
-| PR | 标题 | 单一职责 |
+| PR | 标题 | 状态 |
 |---|---|---|
-| G4.1 | `feat(desktop): add tray icon` | 增加系统托盘图标 |
-| G4.2 | `feat(desktop): add tray menu` | 托盘菜单：打开窗口、暂停/启用、退出 |
-| G4.3 | `feat(desktop): support pause toggle` | 暂停时注销快捷键或忽略录音事件 |
-| G4.4 | `feat(desktop): refine window focus behavior` | 减少悬浮窗抢焦点，保持 always-on-top 合理 |
-| G4.5 | `feat(desktop): add compact status mode` | 常驻小窗只显示状态、profile 和最近文本摘要 |
+| G4.1 | `feat(desktop): add tray icon` | 已完成：Tauri tray icon 已接入 |
+| G4.2 | `feat(desktop): add tray menu` | 已完成：托盘菜单支持打开窗口、暂停 / 恢复、退出 |
+| G4.3 | `feat(desktop): support pause toggle` | 已完成：暂停后 runtime 忽略录音输入，GUI / 托盘可恢复 |
+| G4.4 | `feat(desktop): refine window focus behavior` | 已完成：悬浮窗模式 non-focusable，文稿 / 设置模式 focusable |
+| G4.5 | `feat(desktop): add compact status mode` | 已完成并调整为更轻形态：悬浮窗只显示拖拽条 + 圆形麦克风，状态通过颜色和动效反馈 |
 
-验收：
+仍需记录的验收：
 
 - 关闭窗口不等于退出，应用进入托盘。
 - 托盘可暂停/恢复。
@@ -523,30 +522,25 @@ const store = {
 
 ## 6. 推荐执行顺序
 
-当前最推荐从 G2 开始：
+当前 G2 / G3 基础项、G4 常驻体验和 G4.5b UI 解耦已经完成。接下来最推荐先把双模式从“UI 形态分开”推进到“output adapter 行为分开”：
 
 ```text
-G2.1 add rewrite keyring commands
-G2.2 store rewrite keys in credential manager
-G2.3 load rewrite keys for runtime
-G2.4 show rewrite key status
-G2.5 copy rewrite variants
-G2.6 paste selected rewrite variant
-G3.1 emit rewrite trace events
-G3.2 show rewrite fallback reason
-G3.3 show latency breakdown
-G4.1 add tray icon
-G4.2 add tray menu
+G4.5a.2 add output mode state
+G4.5a.4 add voice pad editor
+G4.5a.6 document dual mode usage
+G3 trace overlay / open log directory
 G5.4 add Windows manual QA checklist
+G5.5 record Windows app compatibility results
 G6.1 enable tauri bundling
+G6.4 add packaging guide
 ```
 
 理由：
 
-1. keyring 先做。否则 GUI 看起来能设置 rewrite，但真实 LLM 仍依赖命令行环境变量，桌面体验断裂。
-2. variants 操作闭环紧跟。multi 是 GUI 最能体现差异化的地方，展示之后必须能复制/粘贴。
-3. trace / fallback 再做。真实用户遇到缺 key、断网、超时时，需要明确知道系统仍然可用。
-4. 托盘和打包后做。等主功能闭环稳定后再处理常驻和交付。
+1. 悬浮窗模式和文稿模式的 UI 已经分开，但 runtime output adapter 仍未按模式分流；这是当前最大的产品语义缺口。
+2. 文稿模式需要真正的编辑区、最终文本和差异关系，否则还只是早期状态面板。
+3. trace overlay、打开日志目录和 Windows QA 记录能提升问题定位能力，但不应抢在 output adapter 之前。
+4. 打包和 release smoke 应在主交互稳定后推进。
 
 ## 7. 验证命令
 

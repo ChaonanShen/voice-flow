@@ -905,7 +905,7 @@ GUI 不另起独立 browser app。当前桌面端已经是 Tauri，前端就是 
 - R2.11 已完成：`app.toml [rewrite]` schema、默认关闭策略、用户词典、provider/model/profile/timeout 读写，以及 `voice-core::text_pipeline` 非 GUI glue。
 - R2.12~R2.13 已完成：Tauri 内 Web UI 已支持 rewrite 开关、profile/provider/model/timeout 设置，并通过 command 读写 `app.toml [rewrite]`。
 - R2.15~R2.17 已完成到 G2：悬浮窗显示当前 rewrite profile，`RealtimeState::Rewriting` 已由 desktop runtime 真实发出，multi variants 已从 mock 改为监听 `rewrite-result` 事件。
-- R2.14 仍后置：API key 目前仍走环境变量 / `.env`，Windows Credential Manager keyring 存储放到 [`desktop_gui_plan.md`](./desktop_gui_plan.md) G2。
+- R2.14 已完成到桌面端：Settings 可保存 / 清除 provider API key，Tauri 后端通过 Windows Credential Manager keyring 持久化，desktop runtime 构建 rewrite engine 时优先读取 keyring；CLI / 测试仍可走环境变量 / `.env`。
 - Day 2 剩余验证：Windows 实机用真实录音 + 真实 LLM 跑 email / voice command / multi 三条验收路径，具体 checklist 见 [`desktop_gui_plan.md`](./desktop_gui_plan.md) G5。
 
 ### 9.3 Day 3：包装、demo、收尾
@@ -930,9 +930,10 @@ GUI 不另起独立 browser app。当前桌面端已经是 Tauri，前端就是 
 **实际进展（2026-05-24）**：
 
 - R3.1~R3.2 已完成：过短输出、数字丢失、英文专有名词丢失都会触发原文兜底。
+- R3.3 已完成基础版：桌面文稿模式展示 ASR / rewrite / paste 粗略耗时；尚未做完整 trace overlay。
 - R3.7~R3.8 已完成到非 GUI 文档层：README 增加 AI 改写使用指南，`docs/demo-rewrite.md` 提供纯文本、真实 LLM smoke 和 WAV-to-rewrite 命令。
-- R3.3~R3.6 仍后置：它们依赖 GUI / 设置热更新，具体执行顺序见 [`desktop_gui_plan.md`](./desktop_gui_plan.md)。
-- R3.9 单独处理：只在能生成并验证可识别的固定 WAV 时提交 fixture，避免把无效音频放进 demo。
+- R3.9 已完成：`docs/fixtures/demo-rewrite.wav` 和 `docs/fixtures/demo-rewrite.expected.txt` 已提交，用于固定 demo 路径。
+- R3.4~R3.6 仍后置：rewrite trace overlay、设置热更新的精细化和 custom profile prompt editor 仍未做，具体执行顺序见 [`desktop_gui_plan.md`](./desktop_gui_plan.md)。
 
 ### 9.4 节奏与删减
 

@@ -281,6 +281,13 @@ voice-flow/
 
 **Step 验收**：重启后引擎选择和 key 持久化；切换引擎无需重启进程。
 
+**当前状态（2026-05-24）**：
+
+- Step 8 的云端 ASR crate、CLI flag 和 core engine selection 已完成。
+- 桌面 runtime 仍直接使用本地 `StreamingZipformer`，尚未接入 `voice-core::engine::EngineSelection`。
+- 桌面设置面板还没有 local / cloud ASR engine 切换，也没有云端 ASR keyring 表单。
+- rewrite provider keyring 已完成，但它属于 AI 改写 provider key，不等同于云端 ASR key。
+
 ---
 
 ### Step 10：AI 改写（创新点，详细设计见 §十三 / `ai_rewrite_plan.md`）
@@ -304,7 +311,8 @@ voice-flow/
 - **非 GUI rewrite 引擎已完成主链路**：`voice-rewrite` crate、预处理、用户词典、语音命令识别、多 profile、multi JSON 输出、postprocess 兜底、DeepSeek / DashScope / OpenAI provider 都已落地。
 - **core / CLI 接线已完成**：`app.toml [rewrite]` schema、`voice-core::text_pipeline`、`voice-cli rewrite`、`voice-cli transcribe --rewrite`、`voice-cli push-to-talk-transcribe --rewrite` 均可用；不开 rewrite 时默认链路仍等价于 ASR 原文。
 - **文档与 demo 已完成非 GUI 部分**：README 增加 AI 改写使用指南，`docs/demo-rewrite.md` 增加演示步骤，`docs/fixtures/demo-rewrite.wav` 提供固定 16 kHz mono WAV fixture。
-- **GUI 后续提升已拆出**：rewrite 设置面板、profile 状态、multi tabs、Windows keyring、托盘、打包和实机验收等桌面体验事项见 [`desktop_gui_plan.md`](./desktop_gui_plan.md)。
+- **桌面 GUI 已接入 rewrite 主链路**：设置面板支持 rewrite 开关、profile/provider/model/timeout 和 provider keyring；runtime 会发 `Rewriting` 状态和 `rewrite-result` event；文稿模式可展示 variants、fallback 和粗略耗时。
+- **GUI 后续提升已拆出**：文稿模式 output adapter、文稿编辑器 / diff、trace overlay、Windows QA、打包和实机验收等桌面体验事项见 [`desktop_gui_plan.md`](./desktop_gui_plan.md)。
 
 **当前验收命令**：
 
