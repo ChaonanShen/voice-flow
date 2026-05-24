@@ -137,7 +137,13 @@ cargo test -p voice-rewrite --test live_deepseek_examples -- --ignored --nocaptu
 - `cargo test -p voice-rewrite`
 - `cargo tauri build`
 
-其中 `cargo tauri build` 已成功产出 `release exe` 和 `MSI`；`NSIS` target 因下载器网络拒绝未完成，详见 [`docs/desktop-packaging.md`](./docs/desktop-packaging.md)。
+其中 `cargo tauri build` 已成功产出：
+
+- `release exe`
+- `MSI`
+- `NSIS setup.exe`
+
+详见 [`docs/desktop-packaging.md`](./docs/desktop-packaging.md)。
 
 ## 七、模型下载
 

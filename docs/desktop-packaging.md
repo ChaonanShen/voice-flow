@@ -50,8 +50,13 @@ $env:SHERPA_ONNX_ARCHIVE_DIR = "$env:USERPROFILE\.cache\voice-flow\sherpa-onnx"
   - `apps\desktop\src-tauri\target\release\voice-flow-desktop.exe`
 - `MSI` 打包成功：
   - `apps\desktop\src-tauri\target\release\bundle\msi\voice-flow_0.1.0_x64_en-US.msi`
-- `NSIS` target 未完成：
-  - 原因不是项目代码报错，而是下载 NSIS 二进制时遇到 `io: Connection refused`
+- `NSIS` 打包成功：
+  - `apps\desktop\src-tauri\target\release\bundle\nsis\voice-flow_0.1.0_x64-setup.exe`
+
+补充：
+
+- 首次尝试时，`NSIS` 因下载器网络问题失败。
+- 在本地提供 `nsis-3.11.zip` 并放入 Tauri 缓存目录后，重新执行 `cargo tauri build` 已成功完成全部 bundle target。
 
 ## 首次安装后 smoke checklist
 

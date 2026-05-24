@@ -344,7 +344,7 @@ cargo run -p voice-cli -- transcribe docs/fixtures/demo-rewrite.wav --rewrite cl
   - `cargo test -p voice-core`
   - `cargo test -p voice-rewrite`
   - `cargo tauri build`
-- `cargo tauri build` 已成功产出 `release exe` 和 `MSI`；`NSIS` target 因下载器网络拒绝未完成，不属于项目代码错误。
+- `cargo tauri build` 已成功产出 `release exe`、`MSI` 和 `NSIS setup.exe`。
 - **仍待人工补充**：B 站 demo 视频链接、Windows 实机验收记录。
 
 ---
