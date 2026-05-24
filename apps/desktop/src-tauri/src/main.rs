@@ -53,6 +53,12 @@ struct ErrorEvent {
 }
 
 #[derive(Clone, Debug, Serialize)]
+struct PasteFailureEvent {
+    text: String,
+    error: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
 struct RewriteResultEvent {
     profile: String,
     text: String,
@@ -368,7 +374,11 @@ fn run_runtime_session(app: &AppHandle, runtime: &RuntimeHandle, config: AppConf
                         None
                     };
                     let paste_started = Instant::now();
-                    paste_transcript(&rewrite.text).context("failed to paste transcript")?;
+                    if let Err(err) = paste_transcript(&rewrite.text) {
+                        let message = format!("{err:#}");
+                        append_log(format!("paste failed: {message}"));
+                        emit_paste_failure(app, rewrite.text.clone(), message);
+                    }
                     let paste_ms = paste_started.elapsed().as_millis();
                     if let Some(result) = &rewrite.result {
                         emit_rewrite_result(
@@ -589,6 +599,10 @@ fn emit_error(app: &AppHandle, error: anyhow::Error) {
             error: error.to_string(),
         },
     );
+}
+
+fn emit_paste_failure(app: &AppHandle, text: String, error: String) {
+    let _ = app.emit("paste-failure", PasteFailureEvent { text, error });
 }
 
 fn load_config() -> AppConfig {

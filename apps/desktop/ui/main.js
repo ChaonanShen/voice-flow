@@ -398,6 +398,14 @@ async function boot() {
     const payload = event.payload;
     applyState({ state: "error", error: payload?.error ?? "运行时错误" });
   });
+  await listen("paste-failure", (event) => {
+    const payload = event.payload;
+    if (payload?.text) {
+      lastTranscript.textContent = payload.text;
+    }
+    runtimeError.hidden = false;
+    runtimeErrorText.textContent = `文本已生成，但自动粘贴失败：${payload?.error ?? ""}`;
+  });
 
   applyConfig(await invoke("get_config"));
   applyRewriteConfig(await invoke("get_rewrite_config"));
