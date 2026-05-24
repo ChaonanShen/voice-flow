@@ -212,6 +212,7 @@ async function boot() {
   });
 
   applyConfig(await invoke("get_config"));
+  applyRewriteConfig(await invoke("get_rewrite_config"));
   settingsMessage.textContent = "运行中";
   await invoke("start_runtime");
 }
@@ -237,8 +238,22 @@ document.querySelectorAll('input[name="rewrite-provider"]').forEach((input) => {
 
 saveSettings.addEventListener("click", async () => {
   if (activeSettingsTab === "rewrite") {
-    updateRewriteSummary();
-    settingsMessage.textContent = "改写设置预览中，保存接线在下一步";
+    settingsMessage.textContent = "保存中...";
+    try {
+      if (!invoke) {
+        applyRewriteConfig(readRewriteConfig());
+        settingsMessage.textContent = "预览模式";
+        return;
+      }
+
+      const rewrite = await invoke("save_rewrite_config", {
+        rewrite: readRewriteConfig(),
+      });
+      applyRewriteConfig(rewrite);
+      settingsMessage.textContent = "改写设置已保存";
+    } catch (error) {
+      settingsMessage.textContent = String(error);
+    }
     return;
   }
 

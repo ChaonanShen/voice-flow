@@ -14,7 +14,7 @@ use voice_asr_local::{StreamingZipformer, DEFAULT_STREAMING_ZIPFORMER_DIR, MODEL
 use voice_core::asr::AsrEngine;
 use voice_core::capture::AudioFormat;
 use voice_core::clipboard::{ClipboardWriter, SystemClipboard};
-use voice_core::config::{AppConfig, HotkeyConfig};
+use voice_core::config::{AppConfig, HotkeyConfig, RewriteConfig};
 use voice_core::cpal_backend::CpalCapture;
 use voice_core::hotkey::PushToTalkEvent;
 use voice_core::paste::{PasteSimulator, SystemPaste};
@@ -67,6 +67,36 @@ fn save_config(config: AppConfig, state: State<'_, DesktopState>) -> Result<AppC
 }
 
 #[tauri::command]
+fn get_rewrite_config(state: State<'_, DesktopState>) -> RewriteConfig {
+    state
+        .runtime
+        .lock()
+        .expect("runtime mutex poisoned")
+        .config
+        .rewrite
+        .clone()
+}
+
+#[tauri::command]
+fn save_rewrite_config(
+    rewrite: RewriteConfig,
+    state: State<'_, DesktopState>,
+) -> Result<RewriteConfig, String> {
+    let config = {
+        let mut runtime = state.runtime.lock().expect("runtime mutex poisoned");
+        runtime.config.rewrite = rewrite.clone();
+        runtime.restart_requested = true;
+        runtime.config.clone()
+    };
+
+    config
+        .write_to(config_path())
+        .map_err(|e| format!("failed to save rewrite config: {e}"))?;
+
+    Ok(rewrite)
+}
+
+#[tauri::command]
 fn start_runtime(app: AppHandle, state: State<'_, DesktopState>) -> Result<(), String> {
     let runtime = state.runtime.clone();
     {
@@ -100,7 +130,9 @@ fn main() {
         .manage(state)
         .invoke_handler(tauri::generate_handler![
             get_config,
+            get_rewrite_config,
             save_config,
+            save_rewrite_config,
             start_runtime
         ])
         .setup(|app| {
