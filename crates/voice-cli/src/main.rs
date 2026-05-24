@@ -130,6 +130,18 @@ enum Command {
         /// sherpa-onnx Streaming Zipformer 模型目录。未提供时读取 VOICE_FLOW_SHERPA_ZIPFORMER_MODEL_DIR。
         #[arg(long)]
         model_dir: Option<PathBuf>,
+        /// 可选 AI 改写档；不提供则粘贴 ASR 原文。
+        #[arg(long, value_parser = parse_profile)]
+        rewrite: Option<Profile>,
+        /// AI 改写模型名。默认 deepseek-chat。
+        #[arg(long, default_value = DEFAULT_REWRITE_MODEL)]
+        rewrite_model: String,
+        /// AI 改写 provider。默认 deepseek。
+        #[arg(long, default_value = "deepseek", value_parser = parse_rewrite_provider)]
+        rewrite_provider: RewriteProvider,
+        /// 当前改写 provider 的 API key。未提供时读取对应环境变量 / .env。
+        #[arg(long)]
+        rewrite_api_key: Option<String>,
         /// 采样率（Hz）。设备不支持时会回退到最近值。
         #[arg(long, default_value_t = 16_000)]
         sample_rate: u32,
@@ -186,10 +198,23 @@ fn main() -> Result<()> {
         } => push_to_talk_record(output, sample_rate, channels, input),
         Command::PushToTalkTranscribe {
             model_dir,
+            rewrite,
+            rewrite_model,
+            rewrite_provider,
+            rewrite_api_key,
             sample_rate,
             channels,
             input,
-        } => push_to_talk_transcribe(model_dir, sample_rate, channels, input),
+        } => push_to_talk_transcribe(
+            model_dir,
+            rewrite,
+            rewrite_model,
+            rewrite_provider,
+            rewrite_api_key,
+            sample_rate,
+            channels,
+            input,
+        ),
     }
 }
 
@@ -489,6 +514,10 @@ fn push_to_talk_record(
 
 fn push_to_talk_transcribe(
     model_dir: Option<PathBuf>,
+    rewrite: Option<Profile>,
+    rewrite_model: String,
+    rewrite_provider: RewriteProvider,
+    rewrite_api_key: Option<String>,
     sample_rate: u32,
     channels: u16,
     input: Option<PathBuf>,
@@ -538,6 +567,19 @@ fn push_to_talk_transcribe(
                     let text = engine
                         .transcribe(&audio.samples, audio.format)
                         .context("failed to transcribe recording")?;
+                    let text = match rewrite {
+                        Some(profile) => {
+                            eprintln!("state: {}", RealtimeState::Rewriting.label());
+                            run_rewrite_pipeline(
+                                &text,
+                                profile,
+                                rewrite_model,
+                                rewrite_provider,
+                                rewrite_api_key,
+                            )?
+                        }
+                        None => text,
+                    };
                     let mut clipboard = SystemClipboard::new();
                     clipboard
                         .write_text(&text)
