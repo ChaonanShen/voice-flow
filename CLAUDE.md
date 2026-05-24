@@ -9,6 +9,17 @@
 - **Windows 是唯一桌面验收目标**。Linux 仅用于 `voice-core` / `voice-asr-local` / `voice-cli` 的纯逻辑与文件回放测试，**不安装也不调试 Tauri/WebKit/DBus 等桌面依赖**。
 - 桌面真实链路（麦克风、全局快捷键、剪贴板、粘贴、Tauri 窗口）只在 Windows 原生环境跑，不要拿 Linux 结果推断 Windows 行为。
 
+## Windows 文档读取
+
+- 在 **Windows PowerShell** 下读取 `plan.md`、`README.md`、`desktop_gui_plan.md`、`ai_rewrite_plan.md` 等中文文档时，**必须显式指定 UTF-8**，不要依赖默认编码。
+- 标准读法：
+  - `Get-Content -Path plan.md -Encoding UTF8`
+  - `Get-Content -Path ai_rewrite_plan.md -Encoding UTF8`
+  - `Get-Content -Path desktop_gui_plan.md -Encoding UTF8`
+  - `Get-Content -Path README.md -Encoding UTF8`
+- 如果需要整文件读取，也保持显式编码：`Get-Content -Path plan.md -Encoding UTF8 -Raw`
+- 未显式带 `-Encoding UTF8` 时，PowerShell 在当前机器上多次出现中文乱码；后续 Codex 会话默认按上面的命令读取。
+
 ## 不要合并的"重复"实现
 
 - **CLI 和桌面壳故意用两套全局快捷键实现**：
