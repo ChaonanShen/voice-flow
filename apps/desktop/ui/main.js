@@ -31,13 +31,6 @@ const providerDefaults = {
   },
 };
 
-const mockVariants = {
-  clean: "今天下午可能因为地铁晚点会晚到十分钟，请老师不用等我。",
-  polish: "今天下午我可能因地铁晚点而晚到十分钟，烦请老师不必等候。",
-  wechat: "老师，我今天下午地铁可能晚点，大概晚到十分钟，您不用等我。",
-  bullets: "• 今天下午可能晚到十分钟\n• 原因是地铁晚点\n• 请老师不用等我",
-};
-
 const configDefaults = {
   model_dir: null,
   hotkey: {
@@ -85,6 +78,7 @@ const listen = window.__TAURI__?.event?.listen;
 let configSnapshot = normalizeConfig(configDefaults);
 let activeSettingsTab = "input";
 let activeVariant = "clean";
+let rewriteVariants = {};
 
 function applyState(event) {
   const state = event?.state ?? "idle";
@@ -94,6 +88,11 @@ function applyState(event) {
   if (state !== "error") {
     runtimeError.hidden = true;
     runtimeErrorText.textContent = "";
+  }
+
+  if (["recording", "transcribing", "rewriting"].includes(state)) {
+    rewriteVariants = {};
+    updateVariantPanel();
   }
 
   if (event?.transcript) {
@@ -106,6 +105,20 @@ function applyState(event) {
     runtimeErrorText.textContent = message;
     settingsMessage.textContent = message;
   }
+}
+
+function applyRewriteResult(result) {
+  rewriteVariants = {
+    clean: result?.text ?? "",
+    ...(result?.variants ?? {}),
+  };
+  if (rewriteVariants.clean) {
+    lastTranscript.textContent = rewriteVariants.clean;
+  }
+  if (result?.fallback && result.error) {
+    settingsMessage.textContent = result.error;
+  }
+  updateVariantPanel();
 }
 
 function normalizeConfig(config) {
@@ -168,6 +181,7 @@ function applyRewriteConfig(rewrite) {
   rewriteModel.value =
     config.model ?? providerDefaults[currentRewriteProvider()]?.model ?? "";
   rewriteTimeout.value = String(config.timeout_ms ?? rewriteDefaults.timeout_ms);
+  rewriteVariants = {};
   updateRewriteSummary();
 }
 
@@ -220,11 +234,14 @@ function switchVariantTab(variant) {
   variantTabs.forEach((button) => {
     button.classList.toggle("is-active", button.dataset.variantTab === variant);
   });
-  variantText.textContent = mockVariants[variant] ?? "";
+  variantText.textContent = rewriteVariants[variant] ?? "";
 }
 
 function updateVariantPanel() {
-  const show = rewriteEnabled.checked && rewriteProfile.value === "multi";
+  const show =
+    rewriteEnabled.checked &&
+    rewriteProfile.value === "multi" &&
+    Object.keys(rewriteVariants).length > 1;
   variantPanel.hidden = !show;
   if (show) {
     switchVariantTab(activeVariant);
@@ -241,6 +258,7 @@ async function boot() {
   }
 
   await listen("realtime-state", (event) => applyState(event.payload));
+  await listen("rewrite-result", (event) => applyRewriteResult(event.payload));
   await listen("runtime-error", (event) => {
     const payload = event.payload;
     applyState({ state: "error", error: payload?.error ?? "运行时错误" });

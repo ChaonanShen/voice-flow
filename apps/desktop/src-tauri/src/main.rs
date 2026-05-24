@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::sync::{
@@ -45,6 +46,15 @@ struct RuntimeState {
 struct ErrorEvent {
     state: &'static str,
     error: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct RewriteResultEvent {
+    profile: String,
+    text: String,
+    variants: HashMap<String, String>,
+    fallback: bool,
+    error: Option<String>,
 }
 
 #[tauri::command]
@@ -292,6 +302,7 @@ fn maybe_rewrite_transcript(
         }
     }
 
+    emit_rewrite_result(app, &result);
     Ok(result.main)
 }
 
@@ -318,6 +329,19 @@ fn take_restart(runtime: &RuntimeHandle) -> bool {
 
 fn emit_state(app: &AppHandle, event: RealtimeStateEvent) {
     let _ = app.emit("realtime-state", event);
+}
+
+fn emit_rewrite_result(app: &AppHandle, result: &RewriteResult) {
+    let _ = app.emit(
+        "rewrite-result",
+        RewriteResultEvent {
+            profile: result.trace.profile.label().to_string(),
+            text: result.main.clone(),
+            variants: result.variants.clone(),
+            fallback: result.trace.fallback,
+            error: result.trace.error.clone(),
+        },
+    );
 }
 
 fn emit_error(app: &AppHandle, error: anyhow::Error) {
