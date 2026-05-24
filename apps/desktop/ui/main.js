@@ -131,7 +131,7 @@ const NativeMenuItem = window.__TAURI__?.menu?.MenuItem;
 const appWindow = window.__TAURI__?.window?.getCurrentWindow?.();
 const LogicalSize = window.__TAURI__?.dpi?.LogicalSize;
 const windowSizes = {
-  floating: { width: 96, height: 106 },
+  floating: { width: 108, height: 118 },
   "voice-pad": { width: 560, height: 420 },
   settings: { width: 460, height: 360 },
 };
