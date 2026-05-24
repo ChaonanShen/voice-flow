@@ -10,6 +10,14 @@
     <main class="shell" aria-label="voice-flow voice input">
       <nav class="mode-nav" aria-label="Desktop mode" data-tauri-drag-region="deep">
         <button
+          class="mode-tab"
+          type="button"
+          aria-selected="false"
+          data-mode-tab="voice-pad"
+        >
+          Voice Pad
+        </button>
+        <button
           class="mode-tab is-active"
           type="button"
           aria-selected="true"
@@ -26,6 +34,18 @@
           Settings
         </button>
       </nav>
+
+      <section class="voice-pad mode-pane" data-mode-pane="voice-pad" hidden aria-label="Voice Pad">
+        <div class="voice-pad-header" data-tauri-drag-region="deep">
+          <strong>Voice Pad</strong>
+          <span>Draft here</span>
+        </div>
+        <textarea
+          id="voice-pad-editor"
+          spellcheck="false"
+          aria-label="Voice Pad editor"
+        ></textarea>
+      </section>
 
       <section class="status-row" data-tauri-drag-region="deep">
         <div class="status-dot" data-state="idle" aria-hidden="true"></div>

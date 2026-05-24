@@ -93,13 +93,17 @@ const rewriteKeyStatus = document.querySelector("#rewrite-key-status");
 const rewriteProviderSummary = document.querySelector("#rewrite-provider-summary");
 const rewriteProfileSummary = document.querySelector("#rewrite-profile-summary");
 const rewriteKeySummary = document.querySelector("#rewrite-key-summary");
+const voicePadEditor = document.querySelector("#voice-pad-editor");
 
 const invoke = window.__TAURI__?.core?.invoke;
 const listen = window.__TAURI__?.event?.listen;
+const NativeMenu = window.__TAURI__?.menu?.Menu;
+const NativeMenuItem = window.__TAURI__?.menu?.MenuItem;
 const appWindow = window.__TAURI__?.window?.getCurrentWindow?.();
 const LogicalSize = window.__TAURI__?.dpi?.LogicalSize;
 const windowSizes = {
   floating: { width: 96, height: 106 },
+  "voice-pad": { width: 560, height: 420 },
   settings: { width: 460, height: 360 },
 };
 let configSnapshot = normalizeConfig(configDefaults);
@@ -111,6 +115,7 @@ let paused = false;
 let activeMode = "floating";
 let currentState = "idle";
 let manualRecording = false;
+let activeContextMenu = null;
 
 function applyState(event) {
   const state = event?.state ?? "idle";
@@ -394,6 +399,10 @@ function switchSettingsTab(tab) {
 }
 
 function switchMode(mode) {
+  if (!document.querySelector(`[data-mode-pane="${mode}"]`)) {
+    return;
+  }
+
   activeMode = mode;
   void applyWindowMode(mode);
   modeTabs.forEach((button) => {
@@ -409,6 +418,69 @@ function switchMode(mode) {
   }
 }
 
+function contextMenuItemsForActiveMode() {
+  const items = [];
+  const hasVoicePad = Boolean(document.querySelector('[data-mode-pane="voice-pad"]'));
+
+  if (activeMode !== "floating") {
+    items.push({
+      label: "切换到悬浮窗模式",
+      mode: "floating",
+    });
+  }
+  if (hasVoicePad && activeMode !== "voice-pad") {
+    items.push({
+      label: "切换到 Pad 模式",
+      mode: "voice-pad",
+    });
+  }
+  if (activeMode !== "settings") {
+    items.push({
+      label: "打开 Settings",
+      mode: "settings",
+    });
+  }
+
+  return items;
+}
+
+function shouldShowModeContextMenu(event) {
+  const pane = event.target.closest("[data-mode-pane]");
+  if (!pane || pane.hidden) {
+    return false;
+  }
+
+  return ["floating", "voice-pad"].includes(pane.dataset.modePane);
+}
+
+async function showModeContextMenu(event) {
+  if (!shouldShowModeContextMenu(event)) {
+    return;
+  }
+
+  event.preventDefault();
+  const items = contextMenuItemsForActiveMode();
+  if (items.length === 0) {
+    return;
+  }
+
+  if (!NativeMenu || !NativeMenuItem) {
+    switchMode(items[0].mode);
+    return;
+  }
+
+  const menuItems = await Promise.all(
+    items.map((item) =>
+      NativeMenuItem.new({
+        text: item.label,
+        action: () => switchMode(item.mode),
+      }),
+    ),
+  );
+  activeContextMenu = await NativeMenu.new({ items: menuItems });
+  await activeContextMenu.popup(undefined, appWindow);
+}
+
 async function applyWindowMode(mode) {
   if (!appWindow || !LogicalSize) {
     return;
@@ -416,7 +488,7 @@ async function applyWindowMode(mode) {
 
   const size = windowSizes[mode] ?? windowSizes.floating;
   try {
-    await appWindow.setFocusable(mode === "settings");
+    await appWindow.setFocusable(mode !== "floating");
     await appWindow.setSize(new LogicalSize(size.width, size.height));
   } catch (error) {
     settingsMessage.textContent = String(error);
@@ -523,6 +595,7 @@ modeTabs.forEach((button) => {
   button.addEventListener("click", () => switchMode(button.dataset.modeTab));
 });
 
+document.addEventListener("contextmenu", showModeContextMenu);
 pauseToggle.addEventListener("click", togglePauseState);
 micButton.addEventListener("click", toggleManualRecording);
 
@@ -699,6 +772,12 @@ saveSettings.addEventListener("click", async () => {
     settingsMessage.textContent = "已保存并重新加载";
   } catch (error) {
     settingsMessage.textContent = String(error);
+  }
+});
+
+voicePadEditor?.addEventListener("input", () => {
+  if (activeMode === "voice-pad") {
+    runtimeError.hidden = true;
   }
 });
 
