@@ -32,6 +32,7 @@ voice-flow/
 │   ├── voice-core/         # 录音 + 引擎路由 + 模式系统
 │   ├── voice-asr-local/    # 端侧 ASR（sherpa-onnx）
 │   ├── voice-asr-cloud/    # 云端 ASR（后期）
+│   ├── voice-rewrite/      # AI 改写管道（文字→文字）
 │   └── voice-cli/          # CLI 验证工具
 ├── apps/desktop/           # Tauri 应用（Step 6 引入）
 ├── models/.gitkeep         # gitignore 实际权重，由脚本下载
@@ -56,7 +57,52 @@ export VOICE_FLOW_SHERPA_ZIPFORMER_MODEL_DIR=models/sherpa-onnx-streaming-zipfor
 cargo run -p voice-cli -- transcribe out.wav
 ```
 
-## 五、模型下载
+## 五、AI 改写
+
+AI 改写是可选的文字管道，默认关闭。开启后链路变成：
+
+```text
+录音 → ASR → rewrite(profile) → 剪贴板 → 粘贴
+```
+
+纯文字调试最快：
+
+```bash
+export DEEPSEEK_API_KEY=...
+echo "嗯，跟老师说一下，今天下午可能因为地铁晚点要晚到十分钟左右，让他不要等我，那个语气正式一点。" \
+  | cargo run -p voice-cli -- rewrite --profile clean --provider deepseek
+```
+
+WAV 转写后改写：
+
+```bash
+cargo run -p voice-cli -- transcribe out.wav --rewrite clean --rewrite-provider deepseek
+```
+
+实时按住说话命令也支持改写，未传 `--rewrite` 时仍粘贴 ASR 原文：
+
+```bash
+cargo run -p voice-cli -- push-to-talk-transcribe --rewrite clean
+```
+
+可用 profile：`off`、`clean`、`polish`、`email`、`wechat`、`bullets`、`commit`、`prompt`、`multi`。可用 provider：`deepseek`、`dashscope`、`openai`；对应环境变量为 `DEEPSEEK_API_KEY`、`DASHSCOPE_API_KEY`、`OPENAI_API_KEY`。非默认 provider 建议显式传 `--model` / `--rewrite-model`。
+
+本地测试不需要真实 LLM key：
+
+```bash
+cargo test -p voice-rewrite
+cargo test -p voice-core text_pipeline
+```
+
+真实 DeepSeek smoke 测试默认 ignored，手动运行：
+
+```bash
+cargo test -p voice-rewrite --test live_deepseek_examples -- --ignored --nocapture --test-threads=1
+```
+
+更多演示步骤见 [`docs/demo-rewrite.md`](./docs/demo-rewrite.md)。
+
+## 六、模型下载
 
 `models/` 目录下不入库实际权重。下载脚本默认把 archive 缓存在 `$HOME/.cache/voice-flow/sherpa-onnx`，并把模型解压到 `models/`：
 
@@ -67,10 +113,10 @@ bash scripts/download-models.sh
 EXTRACT=0 bash scripts/download-models.sh
 ```
 
-## 六、Demo 视频
+## 七、Demo 视频
 
 待 Step 9 完成后补充 B 站链接。
 
-## 七、许可证
+## 八、许可证
 
 [Apache License 2.0](./LICENSE)

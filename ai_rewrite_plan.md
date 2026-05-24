@@ -837,8 +837,6 @@ ASR 原始文本
 
 ### 9.1 Day 1：跑通最小链路（rewrite=clean，DeepSeek）
 
-| PR | 标题 | 单一职责 |
-|---|---|---|
 | 功能单位 | 标题 | 单一职责 |
 |---|---|---|
 | R1.1 | `chore(rewrite): scaffold voice-rewrite crate` | 空 crate + workspace 注册 + 错误类型；**显式禁止**依赖 `voice-asr-*` / `cpal` / `sherpa-onnx` |
@@ -859,6 +857,12 @@ ASR 原始文本
 - `voice-cli transcribe x.wav --rewrite=clean` 跑通 audio→text→rewrite 全链路
 - Linux 上 mock LLM 单测全过（**不需要联网，不需要真 key**）
 - 桌面端**不接 UI**，但状态机已经能切到 Rewriting
+
+**实际进展（2026-05-24）**：
+
+- R1.1~R1.12 已完成：`voice-rewrite` crate、预处理、用户词典、OpenAI-compatible HTTP client、DeepSeek 默认 provider、LLM pipeline、`Rewriting` 状态、`voice-cli rewrite` 和 `voice-cli transcribe --rewrite` 都已落地。
+- R1.10 的非 GUI 实时路径已接到 `voice-cli push-to-talk-transcribe --rewrite <profile>`；桌面 UI 接线按当前策略后置。
+- 验证命令：`cargo test -p voice-rewrite`、`cargo test -p voice-core`、`cargo test -p voice-cli`。
 
 ### 9.2 Day 2：做差异化（多 Profile + 命令 + 多 Provider + 桌面 UI）
 
@@ -887,6 +891,13 @@ ASR 原始文本
 - 选 multi 档 → 悬浮窗 4 个标签都填好，点击任一可复制对应版本
 - 设置面板切换 DeepSeek / DashScope 至少各成功跑一次（OpenAI 可选）
 
+**实际进展（2026-05-24）**：
+
+- R2.1~R2.8 已完成：`polish` / `email` / `wechat` / `commit` / `bullets` / `prompt` / `multi` profiles、语音命令识别、multi JSON 解析和 mock 覆盖都已落地。
+- R2.9~R2.10 已完成到 provider 层：DeepSeek / DashScope / OpenAI 共用 `OpenAiCompatClient`，CLI 暴露 `--provider` / `--rewrite-provider`。
+- R2.11 已完成：`app.toml [rewrite]` schema、默认关闭策略、用户词典、provider/model/profile/timeout 读写，以及 `voice-core::text_pipeline` 非 GUI glue。
+- R2.12~R2.16 属于桌面设置、keyring、悬浮窗和 multi 标签 UI，按"先把 rewrite 引擎做好，GUI 最后做"后置。
+
 ### 9.3 Day 3：包装、demo、收尾
 
 | 功能单位 | 标题 | 单一职责 |
@@ -905,6 +916,13 @@ ASR 原始文本
 - Demo 脚本走通（§11）
 - 改设置不重启桌面即生效
 - README 和 demo 文档完整
+
+**实际进展（2026-05-24）**：
+
+- R3.1~R3.2 已完成：过短输出、数字丢失、英文专有名词丢失都会触发原文兜底。
+- R3.7~R3.8 已完成到非 GUI 文档层：README 增加 AI 改写使用指南，`docs/demo-rewrite.md` 提供纯文本、真实 LLM smoke 和 WAV-to-rewrite 命令。
+- R3.3~R3.6 仍后置：它们依赖桌面 UI / 设置热更新，不在当前非 GUI rewrite 引擎阶段推进。
+- R3.9 单独处理：只在能生成并验证可识别的固定 WAV 时提交 fixture，避免把无效音频放进 demo。
 
 ### 9.4 节奏与删减
 
@@ -1000,7 +1018,7 @@ keyring 里**每个 provider 单独一个 entry**：
 | L2 单测：postprocess | 同上 | 长度 / 数字 / 专有名词检查 | 同上 |
 | L3 集成：pipeline + MockLlmClient | 同上 | 完整文本域流程，不联网 | `cargo test -p voice-rewrite` |
 | L4 集成：voice-core 串联 | 同上 | `MockAsrEngine` + `MockRewritePipeline` 串 push_to_talk | `cargo test -p voice-core` |
-| L5 真 LLM 烟雾测试 | 本地手动 | 单档 + multi 档真实调用一次 | `cargo test -p voice-rewrite --features live-llm -- --ignored` |
+| L5 真 LLM 烟雾测试 | 本地手动 | 单档 + multi 档真实调用一次 | `cargo test -p voice-rewrite --test live_deepseek_examples -- --ignored` |
 | L6 端到端 | 仅 Windows | 麦克风→ASR→改写→粘贴 | 人工 |
 
 L1~L4 **必须**在 CI 跑（一旦加 CI）。L5 默认 ignore，避免 CI 调用真实 API 烧钱。L6 是 demo 验收。
@@ -1116,7 +1134,7 @@ pub enum MockBehavior {
 
 #### L5 真 LLM 烟雾（用 `#[ignore]` 标记）
 
-需要 `ANTHROPIC_API_KEY` 等环境变量；CI 不跑：
+需要 `DEEPSEEK_API_KEY` 环境变量或 `.env`；CI 不跑：
 
 | # | profile | 原文 | 验证 |
 |---|---|---|---|
@@ -1188,8 +1206,8 @@ pub enum MockBehavior {
 ```bash
 # Linux / Windows 都能跑
 cargo test -p voice-rewrite                 # 全部本地测试（mock LLM）
-cargo test -p voice-rewrite --features live-llm -- --ignored \
-    --test-threads=1                        # 真 LLM 烟雾测试
+cargo test -p voice-rewrite --test live_deepseek_examples -- \
+    --ignored --test-threads=1              # 真 LLM 烟雾测试
 cargo test -p voice-core text_pipeline      # voice-core 串联集成
 
 # 一键全部（不含真 LLM）
