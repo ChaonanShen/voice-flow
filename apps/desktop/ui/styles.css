@@ -206,7 +206,7 @@ h1 {
 
 .variant-actions {
   display: grid;
-  grid-template-columns: 96px minmax(0, 1fr);
+  grid-template-columns: 96px 96px minmax(0, 1fr);
   gap: 8px;
   align-items: center;
   min-width: 0;

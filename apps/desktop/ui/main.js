@@ -51,6 +51,7 @@ const variantPanel = document.querySelector("#variant-panel");
 const variantText = document.querySelector("#variant-text");
 const variantTabs = document.querySelectorAll("[data-variant-tab]");
 const copyVariant = document.querySelector("#copy-variant");
+const pasteVariant = document.querySelector("#paste-variant");
 const variantActionStatus = document.querySelector("#variant-action-status");
 const runtimeError = document.querySelector("#runtime-error");
 const runtimeErrorText = document.querySelector("#runtime-error-text");
@@ -292,6 +293,7 @@ function updateVariantPanel() {
     Object.keys(rewriteVariants).length > 1;
   variantPanel.hidden = !show;
   copyVariant.disabled = !show;
+  pasteVariant.disabled = !show;
   if (show) {
     switchVariantTab(activeVariant);
   } else {
@@ -336,24 +338,31 @@ variantTabs.forEach((button) => {
   button.addEventListener("click", () => switchVariantTab(button.dataset.variantTab));
 });
 copyVariant.addEventListener("click", async () => {
+  await writeSelectedVariant("copy_text", "复制中...", "已复制");
+});
+pasteVariant.addEventListener("click", async () => {
+  await writeSelectedVariant("paste_text", "粘贴中...", "已粘贴");
+});
+
+async function writeSelectedVariant(command, pendingLabel, doneLabel) {
   const text = rewriteVariants[activeVariant] ?? "";
   if (!text.trim()) {
     variantActionStatus.textContent = "当前版本为空";
     return;
   }
 
-  variantActionStatus.textContent = "复制中...";
+  variantActionStatus.textContent = pendingLabel;
   try {
     if (!invoke) {
       await navigator.clipboard.writeText(text);
     } else {
-      await invoke("copy_text", { text });
+      await invoke(command, { text });
     }
-    variantActionStatus.textContent = "已复制";
+    variantActionStatus.textContent = doneLabel;
   } catch (error) {
     variantActionStatus.textContent = String(error);
   }
-});
+}
 document.querySelectorAll('input[name="rewrite-provider"]').forEach((input) => {
   input.addEventListener("change", async () => {
     if (!rewriteModel.value.trim()) {

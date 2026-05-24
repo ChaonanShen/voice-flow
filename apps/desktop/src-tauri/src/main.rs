@@ -193,6 +193,15 @@ fn copy_text(text: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn paste_text(text: String) -> Result<(), String> {
+    if text.trim().is_empty() {
+        return Err("paste text cannot be empty".to_string());
+    }
+
+    paste_transcript(&text).map_err(|e| format!("failed to paste text: {e:#}"))
+}
+
+#[tauri::command]
 fn start_runtime(app: AppHandle, state: State<'_, DesktopState>) -> Result<(), String> {
     let runtime = state.runtime.clone();
     {
@@ -233,6 +242,7 @@ fn main() {
             save_rewrite_key,
             delete_rewrite_key,
             copy_text,
+            paste_text,
             start_runtime
         ])
         .setup(|app| {
