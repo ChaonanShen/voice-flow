@@ -1125,6 +1125,58 @@ pub enum MockBehavior {
 | S3 | clean，timeout=1ms | 同上 | fallback=true |
 | S4 | clean，key 错误 | 任意 | LlmError::Auth，fallback=true |
 
+#### L5 扩展：真实输出评审（先记录，暂不执行）
+
+真实 DeepSeek / DashScope 的改写输出**不做逐字相等断言**。即使 temperature 很低，LLM 也可能在同义表达、标点、称呼顺序上有小幅波动；真实调用测试只检查“能调用、非空、关键事实保留、不触发 fallback”等稳定性质。
+
+为了评估“润色效果好不好”，后续可以加两类 `#[ignore]` 测试 / eval 脚本，默认不进入 CI：
+
+1. **人类 judge（优先）**
+   - 文件建议：`crates/voice-rewrite/tests/live_deepseek_examples.rs`
+   - 做法：对固定输入批量跑 `clean / polish / email / wechat / bullets / multi`，用 `--nocapture` 打印真实输出。
+   - 断言：只做最低限度断言（输出非空、关键事实如“老师 / 地铁 / 十分钟”仍存在、`fallback=false`）。
+   - 用途：给开发者人工看 profile 风格、prompt 质量和 demo 可用性，适合早期快速调 prompt。
+   - 示例命令：
+     ```bash
+     cargo test -p voice-rewrite --test live_deepseek_examples -- \
+         --ignored --nocapture --test-threads=1
+     ```
+
+   期望打印形态：
+   ```text
+   === case: teacher_late ===
+   input:
+   嗯，跟老师说一下，今天下午可能因为地铁晚点要晚到十分钟左右，让他不要等我
+
+   [clean]
+   ...
+
+   [polish]
+   ...
+
+   [email]
+   ...
+   ```
+
+2. **LLM judge（可选，后置）**
+   - 文件建议：`crates/voice-rewrite/tests/live_deepseek_judge.rs`
+   - 做法：第一次调用生成 rewrite 输出；第二次调用 LLM 作为 judge，按固定 rubric 返回 JSON。
+   - JSON schema 建议：
+     ```json
+     {
+       "score": 0,
+       "kept_facts": true,
+       "removed_fillers": true,
+       "style_matches_profile": true,
+       "no_hallucination": true,
+       "reason": "..."
+     }
+     ```
+   - 断言：JSON 可解析，`score >= 8`，`kept_facts=true`，`no_hallucination=true`。
+   - 风险：LLM judge 本身也有波动，且每个样例至少两次 API 调用；因此只作为本地质量参考，不作为 merge 阻塞项。
+
+这两类测试都属于**真实质量评估**，和 L1~L4 的确定性 mock 测试职责不同：mock 测试保障编排逻辑稳定，live eval 帮助判断 prompt 和真实模型输出是否值得用于 demo。
+
 ### 13.4 测试 fixtures
 
 - `crates/voice-rewrite/tests/fixtures/preprocess/`：每个样例一个 `.in.txt` + `.expected.txt`
