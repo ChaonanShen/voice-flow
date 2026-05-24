@@ -217,6 +217,50 @@ cargo run
 
 ## 9. 记录实测结果
 
+## 10. 桌面 GUI QA checklist
+
+建议每次桌面端较大改动后至少覆盖一次下面矩阵：
+
+- 悬浮窗模式：
+  - `Alt+Space` 录音 -> local ASR -> 自动粘贴到 Notepad
+  - 点击麦克风录音 -> 自动粘贴到浏览器输入框
+- 文稿模式：
+  - 录音结果写入内部编辑区，不自动粘贴到外部应用
+  - `插入光标` / `替换全文` / `追加末尾` 三种写入模式都可用
+  - multi variants 可切换，并可“写入文稿”
+- rewrite：
+  - clean profile 可用
+  - email profile 可用
+  - voice command 可覆盖默认 profile
+  - trace overlay 可打开，能看到 preprocess / LLM / fallback 信息
+- ASR engine：
+  - local engine 可用
+  - cloud engine 在保存 DashScope key 后可用
+  - cloud engine 缺 key 时给出清晰报错
+- 常驻与设置：
+  - 托盘可暂停 / 恢复 / 退出
+  - 关闭窗口后进入托盘
+  - 保存设置后 runtime 自动重载
+  - diagnostics 可刷新
+  - “打开日志目录”按钮可用
+
+## 11. App compatibility checklist
+
+至少记录一次下面目标应用的结果：
+
+- Notepad
+- VS Code
+- 浏览器输入框
+- Outlook / Web Mail
+- 微信 / 企业微信
+
+对每个目标应用记录：
+
+- 悬浮窗模式是否能自动粘贴
+- 文稿模式是否保持只写内部编辑区
+- 是否需要管理员权限
+- 是否有焦点/快捷键冲突/粘贴失败问题
+
 ### 2026-05-23 首轮桌面实测
 
 - 环境：Windows 原生桌面，Git Bash 中运行 `apps/desktop/src-tauri` 的 `cargo run`，Rust / Cargo 可正常使用，MSVC 构建环境可完成桌面构建。

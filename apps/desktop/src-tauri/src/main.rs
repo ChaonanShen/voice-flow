@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::process::Command;
 use std::fs::OpenOptions;
 use std::future::Future;
 use std::io::Write;
@@ -108,6 +109,16 @@ struct TimingEvent {
     asr_ms: u128,
     rewrite_ms: Option<u128>,
     paste_ms: Option<u128>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct RewriteTraceEvent {
+    profile: String,
+    fallback: bool,
+    error: Option<String>,
+    preprocess_ms: u128,
+    llm_ms: Option<u128>,
+    llm_called: bool,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -336,6 +347,19 @@ fn get_diagnostics(state: State<'_, DesktopState>) -> Result<DiagnosticsEvent, S
 }
 
 #[tauri::command]
+fn open_log_directory() -> Result<(), String> {
+    let log_dir = log_path()
+        .parent()
+        .ok_or_else(|| "log directory is unavailable".to_string())?
+        .to_path_buf();
+    Command::new("explorer")
+        .arg(log_dir)
+        .spawn()
+        .map_err(|e| format!("failed to open log directory: {e}"))?;
+    Ok(())
+}
+
+#[tauri::command]
 fn get_pause_state(state: State<'_, DesktopState>) -> PauseStateEvent {
     pause_state_event(&state.runtime)
 }
@@ -469,6 +493,7 @@ fn main() {
             save_rewrite_key,
             delete_rewrite_key,
             get_diagnostics,
+            open_log_directory,
             get_pause_state,
             get_output_mode,
             set_output_mode,
@@ -1032,6 +1057,21 @@ fn emit_rewrite_result(app: &AppHandle, result: &RewriteResult, timings: TimingE
             error: result.trace.error.clone(),
             trace: result.trace.clone(),
             timings,
+        },
+    );
+    emit_rewrite_trace(app, &result.trace);
+}
+
+fn emit_rewrite_trace(app: &AppHandle, trace: &RewriteTrace) {
+    let _ = app.emit(
+        "rewrite-trace",
+        RewriteTraceEvent {
+            profile: trace.profile.label().to_string(),
+            fallback: trace.fallback,
+            error: trace.error.clone(),
+            preprocess_ms: trace.preprocess_ms,
+            llm_ms: trace.llm_ms,
+            llm_called: trace.llm_called,
         },
     );
 }

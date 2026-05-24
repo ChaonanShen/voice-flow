@@ -50,7 +50,10 @@
   - provider 选择。
   - model 输入。
   - timeout 输入。
-  - API key 输入框目前是 UI shell，真实 key 暂时走环境变量或 `.env`。
+  - provider API key 已接入 Windows Credential Manager。
+- Desktop settings 同时已支持：
+  - ASR engine 选择：`local` / `cloud`
+  - DashScope cloud ASR keyring
 - Tauri command 已接入：
   - `get_rewrite_config`
   - `save_rewrite_config`
@@ -62,7 +65,18 @@
   - 当前 rewrite profile chip。
   - `Rewriting` 状态。
   - multi profile 的真实 variants tab，不再使用 mock variants。
+- 文稿模式现已支持：
+  - output mode = `voice_pad`
+  - 原始转写 / 最终输出差异展示
+  - 内部编辑区写入（插入 / 替换 / 追加）
+- 悬浮窗模式保持：
+  - output mode = `floating_input`
+  - 自动粘贴到外部应用
 - 后端新增 `rewrite-result` 事件，前端用该事件展示真实 `RewriteResult::variants`。
+- 后端新增：
+  - `desktop-output-result`
+  - `rewrite-trace`
+- GUI 已支持 trace overlay 和“打开日志目录”。
 
 ## 关键提交
 
@@ -247,18 +261,14 @@ $env:DEEPSEEK_API_KEY="你的key"
 
 ## 当前限制
 
-- GUI 的 API key 输入框暂未持久化到 Windows Credential Manager；当前真实 LLM key 通过环境变量或 `.env` 读取。
 - Desktop 设置保存后当前通过 restart runtime session 生效，还不是更细粒度的热更新。
-- multi variants 已能展示真实结果，但点击某个 variant 后复制 / 替换粘贴文本的交互还没有做完整。
 - 尚未完成 Windows 实机 checklist 记录：真实麦克风、全局快捷键、剪贴板粘贴、真实 LLM、不同 app 输入框的完整组合测试。
-- GUI 还没有展示 rewrite trace / latency breakdown。
+- cloud ASR 虽然已接入 desktop settings/runtime，但还缺 Windows 实机验收记录。
 
 ## 下一步建议
 
-GUI / Windows 桌面体验的后续提升已独立整理到 [`desktop_gui_plan.md`](../desktop_gui_plan.md)。近期建议按该文档的 G2 -> G3 -> G4 顺序推进：
+GUI / Windows 桌面体验的后续提升已独立整理到 [`desktop_gui_plan.md`](../desktop_gui_plan.md)。当前最值得继续推进的是：
 
-1. 做 Windows Credential Manager keyring 接入，解决 GUI API key 输入框只是 shell 的问题。
-2. 完成 multi variants 的用户操作闭环：点击候选后复制或替换当前结果。
-3. 加 rewrite trace / latency UI，展示 ASR、rewrite、fallback 原因和耗时。
-4. 补 desktop 实机验收清单，并记录一次真实运行结果。
-5. 做托盘、暂停、日志诊断和 Tauri 打包。
+1. 补 cloud ASR 的 Windows 实机验收记录。
+2. 补文稿模式 / 悬浮窗模式在 Notepad、浏览器、VS Code、微信等目标应用中的兼容矩阵。
+3. 跑一次 Tauri bundling，并记录 installer / bundle smoke 结果。

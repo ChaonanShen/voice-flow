@@ -57,6 +57,25 @@ export VOICE_FLOW_SHERPA_ZIPFORMER_MODEL_DIR=models/sherpa-onnx-streaming-zipfor
 cargo run -p voice-cli -- transcribe out.wav
 ```
 
+桌面端开发运行：
+
+```powershell
+& C:\Users\16867\.cargo\bin\cargo.exe run --manifest-path apps/desktop/src-tauri/Cargo.toml
+```
+
+桌面端当前包含两种输出模式：
+
+- `悬浮窗模式`：结果输出到外部应用，走 `clipboard -> simulated paste`
+- `文稿模式`：结果写入 voice-flow 内部编辑区，不自动粘贴到外部应用
+
+桌面端当前也支持：
+
+- ASR engine 选择：`local` / `cloud`
+- rewrite provider keyring
+- cloud ASR keyring
+- trace overlay
+- diagnostics 和打开日志目录
+
 ## 五、AI 改写
 
 AI 改写是可选的文字管道，默认关闭。开启后链路变成：
@@ -102,7 +121,13 @@ cargo test -p voice-rewrite --test live_deepseek_examples -- --ignored --nocaptu
 
 更多演示步骤见 [`docs/demo-rewrite.md`](./docs/demo-rewrite.md)。当前阶段完成项、GUI 运行方式和测试记录见 [`docs/rewrite-stage-report.md`](./docs/rewrite-stage-report.md)。
 
-## 六、模型下载
+## 六、桌面端文档
+
+- Windows 手测与 QA：[`windows_testing.md`](./windows_testing.md)
+- Desktop GUI 路线：[`desktop_gui_plan.md`](./desktop_gui_plan.md)
+- Desktop 打包：[`docs/desktop-packaging.md`](./docs/desktop-packaging.md)
+
+## 七、模型下载
 
 `models/` 目录下不入库实际权重。下载脚本默认把 archive 缓存在 `$HOME/.cache/voice-flow/sherpa-onnx`，并把模型解压到 `models/`：
 
@@ -113,10 +138,10 @@ bash scripts/download-models.sh
 EXTRACT=0 bash scripts/download-models.sh
 ```
 
-## 七、Demo 视频
+## 八、Demo 视频
 
 待 Step 9 完成后补充 B 站链接。
 
-## 八、许可证
+## 九、许可证
 
 [Apache License 2.0](./LICENSE)

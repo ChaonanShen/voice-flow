@@ -105,12 +105,7 @@ GUI 提升的目标不是重写核心引擎，而是补齐普通 Windows 用户�
 
 当前限制：
 
-- 文稿模式目前恢复为早期主面板形态，但还没有接入 `Result -> 文稿编辑区` output adapter。
-- 文稿模式还没有真正的可编辑最终文稿区，也没有完整展示“Last transcript -> Final text”差异。
-- runtime output adapter 仍以悬浮窗模式自动粘贴链路为主，尚未按模式切换外部粘贴 / 内部插入。
-- `rewrite-result` event 已携带 trace 数据，但 GUI 还没有完整 trace overlay，目前只展示 fallback 和耗时摘要。
-- 日志文件已写入本地，但 GUI 还没有打开日志目录入口。
-- 还没有正式打包 installer。
+- cloud ASR 仍缺 Windows 实机验收记录。
 - 还缺 Windows 实机验收清单和记录。
 
 ## 4. GUI 架构原则
@@ -270,7 +265,7 @@ GUI 应主要监听事件，而不是轮询 runtime：
 
 | PR | 标题 | 状态 |
 |---|---|---|
-| G3.1 | `feat(desktop): emit rewrite trace events` | 部分完成：`rewrite-result` payload 已携带 `RewriteTrace`；尚未拆独立 `rewrite-trace` event / overlay |
+| G3.1 | `feat(desktop): emit rewrite trace events` | 已完成：`rewrite-trace` event 已拆出，文稿模式可打开 trace overlay |
 | G3.2 | `feat(desktop): show rewrite fallback reason` | 已完成：文稿模式展示 fallback reason |
 | G3.3 | `feat(desktop): show latency breakdown` | 已完成：文稿模式展示 ASR / rewrite / paste 粗略耗时 |
 | G3.4 | `feat(desktop): add diagnostics panel` | 已完成：Settings 诊断页显示 config path、log path、模型目录、runtime、rewrite key 状态 |
@@ -278,8 +273,6 @@ GUI 应主要监听事件，而不是轮询 runtime：
 
 后续小项：
 
-- 增加 trace overlay，展示 preprocess / voice command / LLM / postprocess 关键阶段。
-- 增加“打开日志目录”按钮。
 - 把断网、错误 key、multi JSON 非法等 fallback 场景写入 Windows 手测记录。
 
 ### G4：Windows 常驻体验（已完成基础常驻形态）
@@ -343,7 +336,8 @@ GUI 应主要监听事件，而不是轮询 runtime：
 实际进展（2026-05-24）：
 
 - 已完成 G4.5a.3 的第一步：主窗口增加悬浮窗模式 / 设置切换，Settings 不再只是临时展开面板。
-- 已完成 G4.5a.4a：新增最小文稿模式 pane 和 `textarea` 编辑区，使文稿模式成为真实可切换目标；暂未接入 Result -> 文稿编辑区的 output adapter。
+- 已完成 G4.5a.2：desktop shell 已新增 `floating_input` / `voice_pad` output mode；两种模式共用同一条 `Audio Capture -> ASR -> Preprocess -> Rewrite -> Result` pipeline，只在输出阶段分流。
+- 已完成 G4.5a.4a：文稿模式现已包含真实 `textarea` 编辑区、原始转写 / 最终输出差异视图，以及插入光标 / 替换全文 / 追加末尾三种写入策略。
 - 已完成 G4.5a.5 的早期状态面板版本：悬浮窗模式曾压缩为状态、profile、输出目标、最近输出、fallback / latency 和 variants 入口；该形态随后被更轻的麦克风悬浮态替代。
 - 已完成 G4.5a.5a：悬浮窗模式默认窗口缩小为 96x106 的透明小圆形麦克风悬浮窗；进入文稿模式时展开到 560x420，进入设置时展开到 460x360，返回悬浮窗模式时缩回。
 - 已完成悬浮窗拖拽能力：小窗顶部拖拽条使用 Tauri `data-tauri-drag-region`，麦克风本体只负责点击开始 / 结束录音。
@@ -351,7 +345,7 @@ GUI 应主要监听事件，而不是轮询 runtime：
 - 已完成 G4.5a.5c：悬浮态 UI 只保留顶部小横杠和圆形麦克风；录音时红色脉冲，转写 / 改写时蓝色反馈，完成时绿色反馈，错误时红色反馈，不再显示长状态面板。
 - 已完成 G4.5a.5d：悬浮窗模式和文稿模式中右键弹出 Tauri 原生模式菜单，可以切换到悬浮窗模式、文稿模式或设置。
 - 悬浮窗模式设置为 non-focusable，目标是减少点击小窗时抢走外部输入框焦点；设置模式切回 focusable，保证设置表单可编辑。
-- 文稿模式 / 设置模式切回 focusable；当前自动粘贴链路仍保持悬浮窗模式现状，尚未实现按模式切换 output adapter。
+- 文稿模式 / 设置模式切回 focusable；当前 output adapter 已按模式分流：悬浮窗模式自动粘贴到外部应用，文稿模式写入内部编辑区。
 
 ### G4.5b：桌面 UI 模式解耦（计划新增）
 
@@ -469,7 +463,7 @@ const store = {
 - 已完成 G4.5b.4：模式切换已拆为 `setMode`、`renderModeVisibility`、`applyWindowChrome`；设置面板进入 / 返回通过 `openSettings` / `closeSettings` 处理，保留进入设置前的内容模式。
 - 已完成后续 UI 修正：Tauri 窗口和 Web 根背景改为非透明浅色，避免悬浮窗模式和文稿模式出现透明底色。
 - 已完成设置面板遮挡修正：Settings pane 填满窗口可用区域，内容区改为内部滚动，并给 `AI 改写` 开关行设置稳定高度，避免顶部开关行被裁切。
-- 当前仍未完成：文稿模式真正编辑器、Result -> 文稿编辑区 output adapter、Last transcript -> Final text 差异视图。
+- 当前仍未完成：Windows 实机兼容矩阵、cloud ASR 实测记录、打包 smoke 和 first-run model missing 引导。
 
 ### G5：快捷键、粘贴和 Windows 实机兼容
 
@@ -525,10 +519,6 @@ const store = {
 当前 G2 / G3 基础项、G4 常驻体验和 G4.5b UI 解耦已经完成。接下来最推荐先把双模式从“UI 形态分开”推进到“output adapter 行为分开”：
 
 ```text
-G4.5a.2 add output mode state
-G4.5a.4 add voice pad editor
-G4.5a.6 document dual mode usage
-G3 trace overlay / open log directory
 G5.4 add Windows manual QA checklist
 G5.5 record Windows app compatibility results
 G6.1 enable tauri bundling
@@ -537,10 +527,9 @@ G6.4 add packaging guide
 
 理由：
 
-1. 悬浮窗模式和文稿模式的 UI 已经分开，但 runtime output adapter 仍未按模式分流；这是当前最大的产品语义缺口。
-2. 文稿模式需要真正的编辑区、最终文本和差异关系，否则还只是早期状态面板。
-3. trace overlay、打开日志目录和 Windows QA 记录能提升问题定位能力，但不应抢在 output adapter 之前。
-4. 打包和 release smoke 应在主交互稳定后推进。
+1. output adapter、文稿编辑区、trace overlay 和打开日志目录已经补齐，当前瓶颈转为 Windows 实机兼容验证。
+2. cloud ASR 虽然已接入 desktop settings/runtime，但仍缺真实 Windows 录音 + 网络链路验收。
+3. 打包和 release smoke 现在可以推进，但应与 Windows QA 一起记录。
 
 ## 7. 验证命令
 

@@ -55,6 +55,7 @@ const profileChip = document.querySelector("#document-profile-chip");
 const resultMeta = document.querySelector("#document-result-meta");
 const fallbackReason = document.querySelector("#document-fallback-reason");
 const latencySummary = document.querySelector("#document-latency-summary");
+const traceToggle = document.querySelector("#document-trace-toggle");
 const diffRaw = document.querySelector("#document-diff-raw");
 const diffFinal = document.querySelector("#document-diff-final");
 const documentEditor = document.querySelector("#document-editor");
@@ -95,6 +96,7 @@ const saveSettings = document.querySelector("#settings-save");
 const settingsTabs = document.querySelectorAll("[data-settings-tab]");
 const settingsPanes = document.querySelectorAll("[data-settings-pane]");
 const refreshDiagnostics = document.querySelector("#settings-refresh-diagnostics");
+const openLogs = document.querySelector("#settings-open-logs");
 const diagConfigPath = document.querySelector("#settings-diag-config-path");
 const diagLogPath = document.querySelector("#settings-diag-log-path");
 const diagModelDir = document.querySelector("#settings-diag-model-dir");
@@ -112,6 +114,13 @@ const rewriteKeyStatus = document.querySelector("#settings-rewrite-key-status");
 const rewriteProviderSummary = document.querySelector("#settings-rewrite-provider-summary");
 const rewriteProfileSummary = document.querySelector("#settings-rewrite-profile-summary");
 const rewriteKeySummary = document.querySelector("#settings-rewrite-key-summary");
+const traceOverlay = document.querySelector("#document-trace-overlay");
+const traceClose = document.querySelector("#document-trace-close");
+const traceProfile = document.querySelector("#document-trace-profile");
+const tracePreprocess = document.querySelector("#document-trace-preprocess");
+const traceLlm = document.querySelector("#document-trace-llm");
+const traceFallback = document.querySelector("#document-trace-fallback");
+const traceError = document.querySelector("#document-trace-error");
 
 const invoke = window.__TAURI__?.core?.invoke;
 const listen = window.__TAURI__?.event?.listen;
@@ -149,6 +158,8 @@ const store = {
     fallbackReason: "",
     latencySummary: "",
   },
+  trace: null,
+  traceVisible: false,
   editorStatus: "",
   settingsMessage: "",
 };
@@ -200,6 +211,22 @@ function renderRuntimeViews() {
   renderFloatingMode();
   renderDocumentMode();
   renderSettingsView();
+  renderTraceOverlay();
+}
+
+function renderTraceOverlay() {
+  traceOverlay.hidden = !store.traceVisible;
+  traceProfile.textContent = store.trace?.profile ?? "-";
+  tracePreprocess.textContent = Number.isFinite(Number(store.trace?.preprocess_ms))
+    ? `${store.trace.preprocess_ms}ms`
+    : "-";
+  traceLlm.textContent = store.trace?.llm_called
+    ? Number.isFinite(Number(store.trace?.llm_ms))
+      ? `${store.trace.llm_ms}ms`
+      : "called"
+    : "not called";
+  traceFallback.textContent = store.trace?.fallback ? "yes" : "no";
+  traceError.textContent = store.trace?.error ?? "-";
 }
 
 function renderModeVisibility() {
@@ -313,6 +340,11 @@ function applyDesktopOutputResult(result) {
   }
   updateVariantPanel();
   renderRuntimeViews();
+}
+
+function applyRewriteTrace(trace) {
+  store.trace = trace ?? null;
+  renderTraceOverlay();
 }
 
 function updateResultMeta(result) {
@@ -803,6 +835,7 @@ async function boot() {
   await listen("realtime-state", (event) => applyState(event.payload));
   await listen("pause-state", (event) => applyPauseState(event.payload));
   await listen("rewrite-result", (event) => applyRewriteResult(event.payload));
+  await listen("rewrite-trace", (event) => applyRewriteTrace(event.payload));
   await listen("desktop-output-result", (event) => applyDesktopOutputResult(event.payload));
   await listen("output-mode-updated", (event) => {
     store.outputMode = event.payload ?? "floating_input";
@@ -930,6 +963,29 @@ settingsTabs.forEach((button) => {
   button.addEventListener("click", () => switchSettingsTab(button.dataset.settingsTab));
 });
 refreshDiagnostics.addEventListener("click", refreshDiagnosticsPanel);
+openLogs.addEventListener("click", async () => {
+  if (!invoke) {
+    store.settingsMessage = "预览模式";
+    renderSettingsView();
+    return;
+  }
+  try {
+    await invoke("open_log_directory");
+    store.settingsMessage = "已打开日志目录";
+    renderSettingsView();
+  } catch (error) {
+    store.settingsMessage = String(error);
+    renderSettingsView();
+  }
+});
+traceToggle.addEventListener("click", () => {
+  store.traceVisible = true;
+  renderTraceOverlay();
+});
+traceClose.addEventListener("click", () => {
+  store.traceVisible = false;
+  renderTraceOverlay();
+});
 
 rewriteEnabled.addEventListener("change", updateRewriteSummary);
 rewriteProfile.addEventListener("change", updateRewriteSummary);
