@@ -98,12 +98,10 @@ const invoke = window.__TAURI__?.core?.invoke;
 const listen = window.__TAURI__?.event?.listen;
 const appWindow = window.__TAURI__?.window?.getCurrentWindow?.();
 const LogicalSize = window.__TAURI__?.dpi?.LogicalSize;
-const PhysicalPosition = window.__TAURI__?.dpi?.PhysicalPosition;
 const windowSizes = {
-  floating: { width: 96, height: 96 },
+  floating: { width: 96, height: 106 },
   settings: { width: 460, height: 360 },
 };
-const dragThresholdPx = 6;
 let configSnapshot = normalizeConfig(configDefaults);
 let activeSettingsTab = "input";
 let activeVariant = "clean";
@@ -113,7 +111,6 @@ let paused = false;
 let activeMode = "floating";
 let currentState = "idle";
 let manualRecording = false;
-let micPointer = null;
 
 function applyState(event) {
   const state = event?.state ?? "idle";
@@ -187,91 +184,6 @@ function updateMicTitle() {
     : manualRecording
       ? "点击结束录音"
       : "点击开始/结束；Alt+Space 按住说话";
-}
-
-function beginMicPointer(event) {
-  if (event.button !== 0) {
-    return;
-  }
-
-  micPointer = {
-    id: event.pointerId,
-    clientX: event.clientX,
-    clientY: event.clientY,
-    screenX: event.screenX,
-    screenY: event.screenY,
-    dragging: false,
-    windowX: null,
-    windowY: null,
-  };
-  micButton.setPointerCapture?.(event.pointerId);
-}
-
-async function moveMicPointer(event) {
-  if (!micPointer || micPointer.id !== event.pointerId || micPointer.dragging) {
-    return;
-  }
-
-  const dx = event.clientX - micPointer.clientX;
-  const dy = event.clientY - micPointer.clientY;
-  if (Math.hypot(dx, dy) < dragThresholdPx) {
-    return;
-  }
-
-  micPointer.dragging = true;
-  await prepareManualWindowDrag();
-}
-
-async function prepareManualWindowDrag() {
-  if (!appWindow) {
-    return;
-  }
-
-  try {
-    const position = await appWindow.outerPosition();
-    if (!micPointer) {
-      return;
-    }
-    micPointer.windowX = position.x;
-    micPointer.windowY = position.y;
-  } catch (error) {
-    settingsMessage.textContent = String(error);
-  }
-}
-
-function dragMicWindow(event) {
-  if (
-    !micPointer?.dragging ||
-    micPointer.windowX === null ||
-    micPointer.windowY === null ||
-    !appWindow ||
-    !PhysicalPosition
-  ) {
-    return;
-  }
-
-  const x = micPointer.windowX + event.screenX - micPointer.screenX;
-  const y = micPointer.windowY + event.screenY - micPointer.screenY;
-  void appWindow.setPosition(new PhysicalPosition(Math.round(x), Math.round(y)));
-}
-
-function endMicPointer(event) {
-  if (!micPointer || micPointer.id !== event.pointerId) {
-    return;
-  }
-
-  const wasDragging = micPointer.dragging;
-  micPointer = null;
-  micButton.releasePointerCapture?.(event.pointerId);
-  if (!wasDragging) {
-    void toggleManualRecording();
-  }
-}
-
-function cancelMicPointer(event) {
-  if (micPointer?.id === event.pointerId) {
-    micPointer = null;
-  }
 }
 
 function applyRewriteResult(result) {
@@ -612,11 +524,7 @@ modeTabs.forEach((button) => {
 });
 
 pauseToggle.addEventListener("click", togglePauseState);
-micButton.addEventListener("pointerdown", beginMicPointer);
-micButton.addEventListener("pointermove", moveMicPointer);
-micButton.addEventListener("pointermove", dragMicWindow);
-micButton.addEventListener("pointerup", endMicPointer);
-micButton.addEventListener("pointercancel", cancelMicPointer);
+micButton.addEventListener("click", toggleManualRecording);
 
 async function togglePauseState() {
   const next = !paused;

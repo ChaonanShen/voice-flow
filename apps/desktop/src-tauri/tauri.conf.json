@@ -12,7 +12,7 @@
       {
         "title": "voice-flow",
         "width": 96,
-        "height": 96,
+        "height": 106,
         "resizable": false,
         "decorations": false,
         "alwaysOnTop": true,
