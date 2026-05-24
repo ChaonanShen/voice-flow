@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::RewriteError;
 use crate::llm::{ChatRequest, LlmClient, ResponseFormat};
+use crate::postprocess::{validate_rewrite, PostprocessDecision};
 use crate::preprocess::{Preprocessor, UserDictionary};
 use crate::profile::Profile;
 use crate::prompts::system_prompt;
@@ -144,10 +145,19 @@ where
             Ok(response) => {
                 if selected_profile == Profile::Multi {
                     match parse_multi_response(&response.content) {
-                        Ok(variants) => {
+                        Ok(mut variants) => {
+                            for value in variants.values_mut() {
+                                if let PostprocessDecision::Reject(_) =
+                                    validate_rewrite(&preprocessed.cleaned_text, value)
+                                {
+                                    value.clear();
+                                }
+                            }
                             let main = variants.get("clean").cloned().unwrap_or_default();
                             if main.trim().is_empty() {
-                                trace.mark_fallback("multi response missing clean output");
+                                trace.mark_fallback(
+                                    "multi response missing clean output or failed postprocess",
+                                );
                                 return Ok(fallback(preprocessed.cleaned_text, trace));
                             }
                             return Ok(RewriteResult {
@@ -164,9 +174,12 @@ where
                 }
 
                 let rewritten = response.content.trim().to_string();
-                if rewritten.is_empty() {
-                    trace.mark_fallback("llm returned empty output");
-                    return Ok(fallback(preprocessed.cleaned_text, trace));
+                match validate_rewrite(&preprocessed.cleaned_text, &rewritten) {
+                    PostprocessDecision::Accept => {}
+                    PostprocessDecision::Reject(reason) => {
+                        trace.mark_fallback(reason);
+                        return Ok(fallback(preprocessed.cleaned_text, trace));
+                    }
                 }
                 Ok(RewriteResult {
                     main: rewritten,
@@ -402,6 +415,52 @@ mod tests {
         assert_eq!(result.variants["polish"], "");
         assert_eq!(result.variants["wechat"], "");
         assert_eq!(result.variants["bullets"], "");
+        assert!(!result.trace.fallback);
+    }
+
+    #[tokio::test]
+    async fn postprocess_falls_back_when_rewrite_drops_number() {
+        let mock = MockLlmClient::ok("下午开会。");
+        let pipeline = LlmRewritePipeline::new(mock);
+        let result = pipeline
+            .process("下午 3 点开会", context(Profile::Polish))
+            .await
+            .unwrap();
+
+        assert_eq!(result.main, "下午 3 点开会");
+        assert!(result.trace.fallback);
+        assert!(result.trace.error.unwrap().contains("missing number"));
+    }
+
+    #[tokio::test]
+    async fn postprocess_falls_back_when_rewrite_drops_proper_noun() {
+        let mock = MockLlmClient::ok("它比那个好用。");
+        let pipeline = LlmRewritePipeline::new(mock);
+        let result = pipeline
+            .process("Claude 比 GPT 好用", context(Profile::Polish))
+            .await
+            .unwrap();
+
+        assert_eq!(result.main, "Claude 比 GPT 好用");
+        assert!(result.trace.fallback);
+        assert!(result.trace.error.unwrap().contains("proper noun"));
+    }
+
+    #[tokio::test]
+    async fn multi_profile_clears_variants_that_fail_postprocess() {
+        let mock = MockLlmClient::ok(
+            r#"{"clean":"下午 3 点开会。","polish":"下午开会。","wechat":"下午 3 点开会","bullets":"- 下午 3 点开会"}"#,
+        );
+        let pipeline = LlmRewritePipeline::new(mock);
+        let result = pipeline
+            .process("下午 3 点开会", context(Profile::Multi))
+            .await
+            .unwrap();
+
+        assert_eq!(result.main, "下午 3 点开会。");
+        assert_eq!(result.variants["polish"], "");
+        assert_eq!(result.variants["wechat"], "下午 3 点开会");
+        assert_eq!(result.variants["bullets"], "- 下午 3 点开会");
         assert!(!result.trace.fallback);
     }
 
