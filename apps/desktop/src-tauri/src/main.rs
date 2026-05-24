@@ -98,6 +98,7 @@ fn get_config(state: State<'_, DesktopState>) -> AppConfig {
 
 #[tauri::command]
 fn save_config(config: AppConfig, state: State<'_, DesktopState>) -> Result<AppConfig, String> {
+    validate_hotkey_config(&config.hotkey)?;
     config
         .write_to(config_path())
         .map_err(|e| format!("failed to save config: {e}"))?;
@@ -226,6 +227,20 @@ fn start_runtime(app: AppHandle, state: State<'_, DesktopState>) -> Result<(), S
         .spawn(move || runtime_loop(app, runtime))
         .map_err(|e| format!("failed to start runtime: {e}"))?;
 
+    Ok(())
+}
+
+fn validate_hotkey_config(config: &HotkeyConfig) -> Result<(), String> {
+    let key = config.key.trim();
+    if key.is_empty() {
+        return Err("hotkey key cannot be empty".to_string());
+    }
+    if !(config.ctrl || config.alt || config.shift || config.logo) {
+        return Err("hotkey requires at least one modifier".to_string());
+    }
+    if key.contains('+') || key.split_whitespace().count() > 1 {
+        return Err("hotkey key must be a single key name, modifiers use checkboxes".to_string());
+    }
     Ok(())
 }
 

@@ -195,6 +195,25 @@ function readConfig() {
   };
 }
 
+function validateHotkeyForm() {
+  const key = hotkeyKey.value.trim();
+  if (!key) {
+    return "快捷键主键不能为空";
+  }
+  if (key.includes("+") || key.split(/\s+/).length > 1) {
+    return "主键只填单个按键，修饰键使用复选框";
+  }
+  if (
+    !hotkeyCtrl.checked &&
+    !hotkeyAlt.checked &&
+    !hotkeyShift.checked &&
+    !hotkeyLogo.checked
+  ) {
+    return "快捷键至少需要一个修饰键";
+  }
+  return null;
+}
+
 function currentRewriteProvider() {
   return (
     document.querySelector('input[name="rewrite-provider"]:checked')?.value ??
@@ -445,6 +464,12 @@ saveSettings.addEventListener("click", async () => {
 
   settingsMessage.textContent = "保存中...";
   try {
+    const hotkeyError = validateHotkeyForm();
+    if (hotkeyError) {
+      settingsMessage.textContent = hotkeyError;
+      return;
+    }
+
     if (!invoke) {
       applyConfig(readConfig());
       settingsMessage.textContent = "预览模式";
