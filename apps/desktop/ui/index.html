@@ -36,46 +36,26 @@
       </nav>
 
       <section class="voice-pad mode-pane" data-mode-pane="voice-pad" hidden aria-label="文稿模式">
-        <div class="voice-pad-header" data-tauri-drag-region="deep">
-          <strong>文稿模式</strong>
-          <span>直接编辑</span>
-        </div>
-        <textarea
-          id="voice-pad-editor"
-          spellcheck="false"
-          aria-label="文稿编辑区"
-        ></textarea>
-      </section>
-
-      <section class="status-row" data-tauri-drag-region="deep">
-        <div class="status-dot" data-state="idle" aria-hidden="true"></div>
-        <div class="status-text">
-          <p class="label">voice-flow</p>
-          <h1 id="state-label">待机</h1>
-        </div>
-        <button id="pause-toggle" class="icon-button" type="button" title="暂停监听">
-          <span aria-hidden="true">||</span>
-        </button>
-        <button id="settings-toggle" class="icon-button" type="button" title="设置">
-          <span aria-hidden="true">...</span>
-        </button>
-      </section>
-
-      <section class="mode-pane" data-mode-pane="floating" aria-label="悬浮窗模式">
-        <section class="floating-panel" aria-label="悬浮窗状态">
-          <div class="floating-drag-handle" data-tauri-drag-region="deep" aria-hidden="true"></div>
-          <button
-            id="mic-button"
-            class="mic-button"
-            type="button"
-            aria-label="麦克风"
-            title="点击开始/结束；Alt+Space 按住说话"
-          >
-            <span class="mic-icon" aria-hidden="true"></span>
+        <section class="status-row" data-tauri-drag-region="deep">
+          <div class="status-dot" data-state="idle" aria-hidden="true"></div>
+          <div class="status-text">
+            <p class="label">voice-flow</p>
+            <h1 id="state-label">待机</h1>
+          </div>
+          <button id="pause-toggle" class="icon-button" type="button" title="暂停监听">
+            <span aria-hidden="true">||</span>
           </button>
+          <button id="settings-toggle" class="icon-button" type="button" title="设置">
+            <span aria-hidden="true">...</span>
+          </button>
+        </section>
 
-          <span id="rewrite-chip" hidden>改写关闭</span>
-          <span id="last-transcript" hidden>尚无识别结果</span>
+        <section class="transcript" aria-label="最近一次识别文本">
+          <div class="transcript-meta">
+            <p class="label">最近文本</p>
+            <span id="rewrite-chip">改写关闭</span>
+          </div>
+          <p id="last-transcript">尚无识别结果</p>
 
           <div class="result-meta" id="result-meta" hidden>
             <span id="fallback-reason"></span>
@@ -109,6 +89,21 @@
         <section class="runtime-error" id="runtime-error" hidden aria-label="运行错误">
           <p class="label">错误详情</p>
           <p id="runtime-error-text"></p>
+        </section>
+      </section>
+
+      <section class="mode-pane" data-mode-pane="floating" aria-label="悬浮窗模式">
+        <section class="floating-panel" aria-label="悬浮窗状态">
+          <div class="floating-drag-handle" data-tauri-drag-region="deep" aria-hidden="true"></div>
+          <button
+            id="mic-button"
+            class="mic-button"
+            type="button"
+            aria-label="麦克风"
+            title="点击开始/结束；Alt+Space 按住说话"
+          >
+            <span class="mic-icon" aria-hidden="true"></span>
+          </button>
         </section>
       </section>
 

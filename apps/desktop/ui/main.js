@@ -93,7 +93,6 @@ const rewriteKeyStatus = document.querySelector("#rewrite-key-status");
 const rewriteProviderSummary = document.querySelector("#rewrite-provider-summary");
 const rewriteProfileSummary = document.querySelector("#rewrite-profile-summary");
 const rewriteKeySummary = document.querySelector("#rewrite-key-summary");
-const voicePadEditor = document.querySelector("#voice-pad-editor");
 
 const invoke = window.__TAURI__?.core?.invoke;
 const listen = window.__TAURI__?.event?.listen;
@@ -113,6 +112,7 @@ let rewriteVariants = {};
 let rewriteKeySaved = false;
 let paused = false;
 let activeMode = "floating";
+let previousContentMode = "floating";
 let currentState = "idle";
 let manualRecording = false;
 let activeContextMenu = null;
@@ -145,7 +145,7 @@ function applyState(event) {
 
   if (event?.error) {
     const message = String(event.error);
-    runtimeError.hidden = true;
+    runtimeError.hidden = false;
     runtimeErrorText.textContent = message;
     settingsMessage.textContent = message;
   }
@@ -403,6 +403,9 @@ function switchMode(mode) {
     return;
   }
 
+  if (mode !== "settings") {
+    previousContentMode = mode;
+  }
   activeMode = mode;
   void applyWindowMode(mode);
   modeTabs.forEach((button) => {
@@ -572,7 +575,7 @@ async function boot() {
     if (payload?.text) {
       lastTranscript.textContent = payload.text;
     }
-    runtimeError.hidden = true;
+    runtimeError.hidden = false;
     runtimeErrorText.textContent = `文本已生成，但自动粘贴失败：${payload?.error ?? ""}`;
   });
 
@@ -585,11 +588,11 @@ async function boot() {
 }
 
 settingsToggle.addEventListener("click", () => {
-  switchMode(activeMode === "settings" ? "floating" : "settings");
+  switchMode(activeMode === "settings" ? previousContentMode : "settings");
 });
 
 floatingSettings?.addEventListener("click", () => switchMode("settings"));
-settingsClose.addEventListener("click", () => switchMode("floating"));
+settingsClose.addEventListener("click", () => switchMode(previousContentMode));
 
 modeTabs.forEach((button) => {
   button.addEventListener("click", () => switchMode(button.dataset.modeTab));
@@ -772,12 +775,6 @@ saveSettings.addEventListener("click", async () => {
     settingsMessage.textContent = "已保存并重新加载";
   } catch (error) {
     settingsMessage.textContent = String(error);
-  }
-});
-
-voicePadEditor?.addEventListener("input", () => {
-  if (activeMode === "voice-pad") {
-    runtimeError.hidden = true;
   }
 });
 
