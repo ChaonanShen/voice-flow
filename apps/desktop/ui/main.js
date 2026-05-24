@@ -70,6 +70,12 @@ const hotkeyKey = document.querySelector("#hotkey-key");
 const saveSettings = document.querySelector("#save-settings");
 const settingsTabs = document.querySelectorAll("[data-settings-tab]");
 const settingsPanes = document.querySelectorAll("[data-settings-pane]");
+const refreshDiagnostics = document.querySelector("#refresh-diagnostics");
+const diagConfigPath = document.querySelector("#diag-config-path");
+const diagLogPath = document.querySelector("#diag-log-path");
+const diagModelDir = document.querySelector("#diag-model-dir");
+const diagRuntime = document.querySelector("#diag-runtime");
+const diagRewriteKey = document.querySelector("#diag-rewrite-key");
 const rewriteEnabled = document.querySelector("#rewrite-enabled");
 const rewriteEnabledLabel = document.querySelector("#rewrite-enabled-label");
 const rewriteProfile = document.querySelector("#rewrite-profile");
@@ -319,6 +325,39 @@ function switchSettingsTab(tab) {
   settingsPanes.forEach((pane) => {
     pane.hidden = pane.dataset.settingsPane !== tab;
   });
+  if (tab === "diagnostics") {
+    refreshDiagnosticsPanel();
+  }
+}
+
+async function refreshDiagnosticsPanel() {
+  if (!invoke) {
+    diagConfigPath.textContent = "预览模式";
+    diagLogPath.textContent = "预览模式";
+    diagModelDir.textContent = "预览模式";
+    diagRuntime.textContent = "预览模式";
+    diagRewriteKey.textContent = "预览模式";
+    return;
+  }
+
+  try {
+    const diagnostics = await invoke("get_diagnostics");
+    diagConfigPath.textContent = diagnostics.config_path ?? "-";
+    diagLogPath.textContent = diagnostics.log_path ?? "-";
+    diagModelDir.textContent = diagnostics.model_dir
+      ? `${diagnostics.model_dir} (${diagnostics.model_dir_exists ? "存在" : "缺失"})`
+      : "未配置";
+    diagRuntime.textContent = diagnostics.runtime_running
+      ? diagnostics.restart_requested
+        ? "运行中，等待重载"
+        : "运行中"
+      : "未运行";
+    diagRewriteKey.textContent = diagnostics.rewrite_key_saved
+      ? `${diagnostics.rewrite_provider} 已保存`
+      : `${diagnostics.rewrite_provider} 未保存`;
+  } catch (error) {
+    settingsMessage.textContent = String(error);
+  }
 }
 
 function switchVariantTab(variant) {
@@ -374,6 +413,7 @@ settingsToggle.addEventListener("click", () => {
 settingsTabs.forEach((button) => {
   button.addEventListener("click", () => switchSettingsTab(button.dataset.settingsTab));
 });
+refreshDiagnostics.addEventListener("click", refreshDiagnosticsPanel);
 
 rewriteEnabled.addEventListener("change", updateRewriteSummary);
 rewriteProfile.addEventListener("change", updateRewriteSummary);

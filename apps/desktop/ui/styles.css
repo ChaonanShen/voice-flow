@@ -316,9 +316,9 @@ h1 {
 
 .settings-tabs {
   display: inline-grid;
-  grid-template-columns: repeat(2, minmax(72px, 1fr));
+  grid-template-columns: repeat(3, minmax(56px, 1fr));
   gap: 2px;
-  width: 176px;
+  width: 220px;
   padding: 2px;
   border: 1px solid #d8dee8;
   border-radius: 6px;
@@ -521,6 +521,38 @@ h1 {
   color: #596579;
   font-size: 12px;
   line-height: 1.35;
+}
+
+.diagnostics-grid {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 7px 10px;
+  min-width: 0;
+}
+
+.diagnostics-grid span {
+  color: #596579;
+  font-size: 12px;
+}
+
+.diagnostics-grid strong {
+  overflow: hidden;
+  color: #243344;
+  font-size: 12px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.secondary-action {
+  width: 88px;
+  height: 28px;
+  border: 1px solid #cfd7e3;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #243344;
+  font-size: 12px;
+  cursor: pointer;
 }
 
 .settings-actions {

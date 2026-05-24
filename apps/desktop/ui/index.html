@@ -78,6 +78,15 @@
           >
             改写
           </button>
+          <button
+            class="settings-tab"
+            type="button"
+            role="tab"
+            aria-selected="false"
+            data-settings-tab="diagnostics"
+          >
+            诊断
+          </button>
         </div>
 
         <div class="settings-pane" data-settings-pane="input">
@@ -165,6 +174,24 @@
             <span id="rewrite-key-summary">DEEPSEEK_API_KEY</span>
           </div>
           <p class="pane-note">API key 会保存到系统凭据管理器，不写入 app.toml；留空保存只更新改写设置。</p>
+        </div>
+
+        <div class="settings-pane" data-settings-pane="diagnostics" hidden>
+          <div class="diagnostics-grid" id="diagnostics-grid">
+            <span>配置</span>
+            <strong id="diag-config-path">-</strong>
+            <span>日志</span>
+            <strong id="diag-log-path">-</strong>
+            <span>模型目录</span>
+            <strong id="diag-model-dir">-</strong>
+            <span>Runtime</span>
+            <strong id="diag-runtime">-</strong>
+            <span>Rewrite key</span>
+            <strong id="diag-rewrite-key">-</strong>
+          </div>
+          <button id="refresh-diagnostics" class="secondary-action" type="button">
+            刷新诊断
+          </button>
         </div>
 
         <div class="settings-actions">

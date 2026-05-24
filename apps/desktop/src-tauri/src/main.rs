@@ -1,5 +1,7 @@
 use std::collections::HashMap;
+use std::fs::OpenOptions;
 use std::future::Future;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::{
     mpsc::{self, Receiver, TryRecvError},
@@ -84,6 +86,19 @@ struct RewriteKeyStatus {
     provider: RewriteProvider,
     saved: bool,
     source: &'static str,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct DiagnosticsEvent {
+    config_path: String,
+    log_path: String,
+    model_dir: Option<String>,
+    model_dir_exists: bool,
+    runtime_running: bool,
+    restart_requested: bool,
+    rewrite_enabled: bool,
+    rewrite_provider: RewriteProvider,
+    rewrite_key_saved: bool,
 }
 
 #[tauri::command]
@@ -191,6 +206,11 @@ fn delete_rewrite_key(
 }
 
 #[tauri::command]
+fn get_diagnostics(state: State<'_, DesktopState>) -> Result<DiagnosticsEvent, String> {
+    diagnostics_event(&state).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn copy_text(text: String) -> Result<(), String> {
     if text.trim().is_empty() {
         return Err("copy text cannot be empty".to_string());
@@ -265,6 +285,7 @@ fn main() {
             get_rewrite_key_status,
             save_rewrite_key,
             delete_rewrite_key,
+            get_diagnostics,
             copy_text,
             paste_text,
             start_runtime
@@ -297,10 +318,12 @@ fn runtime_loop(app: AppHandle, runtime: RuntimeHandle) {
 
 fn run_runtime_session(app: &AppHandle, runtime: &RuntimeHandle, config: AppConfig) -> Result<()> {
     let model_dir = resolve_model_dir(config.model_dir.as_deref())?;
+    append_log(format!("loading model from {}", model_dir.display()));
     let engine = StreamingZipformer::from_model_dir(&model_dir)
         .with_context(|| format!("failed to load model from {}", model_dir.display()))?;
     let hotkey = DesktopHotkey::register(app, config.hotkey.clone())
         .with_context(|| format!("failed to register hotkey {}", config.hotkey.to_label()))?;
+    append_log(format!("registered hotkey {}", config.hotkey.to_label()));
     let mut recorder = PushToTalkRecorder::new(
         CpalCapture::new(),
         AudioFormat {
@@ -325,9 +348,11 @@ fn run_runtime_session(app: &AppHandle, runtime: &RuntimeHandle, config: AppConf
                 .context("failed to handle push-to-talk event")?
             {
                 Some(PushToTalkRecorderEvent::RecordingStarted(_)) => {
+                    append_log("recording started");
                     emit_state(app, RealtimeStateEvent::new(RealtimeState::Recording));
                 }
                 Some(PushToTalkRecorderEvent::RecordingStopped(audio)) => {
+                    append_log("recording stopped");
                     emit_state(app, RealtimeStateEvent::new(RealtimeState::Transcribing));
                     let asr_started = Instant::now();
                     let transcript = engine
@@ -422,6 +447,31 @@ fn paste_transcript(text: &str) -> Result<()> {
     let mut paste = SystemPaste::new();
     paste.paste()?;
     Ok(())
+}
+
+fn diagnostics_event(state: &State<'_, DesktopState>) -> Result<DiagnosticsEvent> {
+    let runtime = state.runtime.lock().expect("runtime mutex poisoned");
+    let model_dir_exists = runtime
+        .config
+        .model_dir
+        .as_deref()
+        .map(|path| Path::new(path).is_dir())
+        .unwrap_or(false);
+    let rewrite_key_saved = read_rewrite_key(runtime.config.rewrite.provider)
+        .map(|key| key.is_some())
+        .unwrap_or(false);
+
+    Ok(DiagnosticsEvent {
+        config_path: config_path().display().to_string(),
+        log_path: log_path().display().to_string(),
+        model_dir: runtime.config.model_dir.clone(),
+        model_dir_exists,
+        runtime_running: runtime.running,
+        restart_requested: runtime.restart_requested,
+        rewrite_enabled: runtime.config.rewrite.enabled,
+        rewrite_provider: runtime.config.rewrite.provider,
+        rewrite_key_saved,
+    })
 }
 
 fn maybe_rewrite_transcript(
@@ -531,6 +581,7 @@ fn emit_rewrite_result(app: &AppHandle, result: &RewriteResult, timings: TimingE
 
 fn emit_error(app: &AppHandle, error: anyhow::Error) {
     eprintln!("runtime error: {error:#}");
+    append_log(format!("runtime error: {error:#}"));
     let _ = app.emit(
         "runtime-error",
         ErrorEvent {
@@ -600,6 +651,24 @@ fn config_path() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("."))
         .join("voice-flow")
         .join("app.toml")
+}
+
+fn log_path() -> PathBuf {
+    dirs::config_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("voice-flow")
+        .join("logs")
+        .join("desktop.log")
+}
+
+fn append_log(message: impl AsRef<str>) {
+    let path = log_path();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) {
+        let _ = writeln!(file, "{}", message.as_ref());
+    }
 }
 
 #[allow(dead_code)]
