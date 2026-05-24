@@ -30,20 +30,109 @@
       </section>
 
       <section class="settings" id="settings-panel" hidden aria-label="设置">
-        <label class="field">
-          <span>模型目录</span>
-          <input id="model-dir" type="text" spellcheck="false" />
-        </label>
-        <div class="hotkey-grid" aria-label="快捷键设置">
-          <label><input id="hotkey-ctrl" type="checkbox" />Ctrl</label>
-          <label><input id="hotkey-alt" type="checkbox" />Alt</label>
-          <label><input id="hotkey-shift" type="checkbox" />Shift</label>
-          <label><input id="hotkey-logo" type="checkbox" />Win</label>
-          <label class="field hotkey-key">
-            <span>键</span>
-            <input id="hotkey-key" type="text" />
-          </label>
+        <div class="settings-tabs" role="tablist" aria-label="设置分组">
+          <button
+            class="settings-tab is-active"
+            type="button"
+            role="tab"
+            aria-selected="true"
+            data-settings-tab="input"
+          >
+            输入
+          </button>
+          <button
+            class="settings-tab"
+            type="button"
+            role="tab"
+            aria-selected="false"
+            data-settings-tab="rewrite"
+          >
+            改写
+          </button>
         </div>
+
+        <div class="settings-pane" data-settings-pane="input">
+          <label class="field">
+            <span>模型目录</span>
+            <input id="model-dir" type="text" spellcheck="false" />
+          </label>
+          <div class="hotkey-grid" aria-label="快捷键设置">
+            <label><input id="hotkey-ctrl" type="checkbox" />Ctrl</label>
+            <label><input id="hotkey-alt" type="checkbox" />Alt</label>
+            <label><input id="hotkey-shift" type="checkbox" />Shift</label>
+            <label><input id="hotkey-logo" type="checkbox" />Win</label>
+            <label class="field hotkey-key">
+              <span>键</span>
+              <input id="hotkey-key" type="text" />
+            </label>
+          </div>
+        </div>
+
+        <div class="settings-pane" data-settings-pane="rewrite" hidden>
+          <label class="switch-row">
+            <span>
+              <strong>AI 改写</strong>
+              <small id="rewrite-enabled-label">关闭</small>
+            </span>
+            <input id="rewrite-enabled" type="checkbox" role="switch" />
+          </label>
+
+          <label class="field">
+            <span>默认档</span>
+            <select id="rewrite-profile">
+              <option value="clean">Clean</option>
+              <option value="polish">Polish</option>
+              <option value="email">Email</option>
+              <option value="wechat">Wechat</option>
+              <option value="bullets">Bullets</option>
+              <option value="commit">Commit</option>
+              <option value="prompt">Prompt</option>
+              <option value="multi">Multi</option>
+            </select>
+          </label>
+
+          <div class="field">
+            <span>Provider</span>
+            <div class="segmented" role="radiogroup" aria-label="Rewrite provider">
+              <label>
+                <input type="radio" name="rewrite-provider" value="deepseek" />
+                <span>DeepSeek</span>
+              </label>
+              <label>
+                <input type="radio" name="rewrite-provider" value="dashscope" />
+                <span>DashScope</span>
+              </label>
+              <label>
+                <input type="radio" name="rewrite-provider" value="openai" />
+                <span>OpenAI</span>
+              </label>
+            </div>
+          </div>
+
+          <label class="field">
+            <span>模型</span>
+            <input id="rewrite-model" type="text" spellcheck="false" />
+          </label>
+
+          <div class="rewrite-grid">
+            <label class="field">
+              <span>超时 ms</span>
+              <input id="rewrite-timeout" type="number" min="500" step="100" />
+            </label>
+            <label class="field">
+              <span>API key</span>
+              <input id="rewrite-api-key" type="password" disabled />
+            </label>
+          </div>
+
+          <div class="rewrite-summary" aria-label="当前改写设置">
+            <span id="rewrite-provider-summary">deepseek</span>
+            <span id="rewrite-profile-summary">clean</span>
+            <span id="rewrite-key-summary">DEEPSEEK_API_KEY</span>
+          </div>
+          <p class="pane-note">当前为界面预览，保存和 keyring 接线在下一步。</p>
+        </div>
+
         <div class="settings-actions">
           <button id="save-settings" type="button">保存</button>
           <span id="settings-message" role="status"></span>
