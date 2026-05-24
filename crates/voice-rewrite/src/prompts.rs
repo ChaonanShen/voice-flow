@@ -5,6 +5,7 @@ pub const WECHAT_SYSTEM_PROMPT: &str = "你是一个把口语转写整理成微�
 pub const BULLETS_SYSTEM_PROMPT: &str = "你是一个把口语转写整理成要点清单的助手。用简短项目符号归纳原文事实，保留数字、人名、地名和英文专有名词，不要添加原文没有的信息。只输出要点清单，不要解释。";
 pub const COMMIT_SYSTEM_PROMPT: &str = "你是一个把口语需求改写成 Conventional Commit 的助手。输出一行 commit 标题，必要时加简短 body；标题使用 feat/fix/docs/test/refactor/chore 等类型，保留关键事实。只输出 commit message，不要解释。";
 pub const PROMPT_SYSTEM_PROMPT: &str = "你是一个把含糊口语需求改写成清晰 AI prompt 的助手。输出目标、上下文、约束、期望输出，结构清楚且可直接交给 AI agent 执行；不要编造原文没有的事实。只输出 prompt 本体，不要解释。";
+pub const MULTI_SYSTEM_PROMPT: &str = "你是一个把口语转写成多种成品文本的助手。请按 JSON 对象返回 4 个字段：clean、polish、wechat、bullets。约束：保留所有人名、地名、英文专有名词、数字；不要编造原文没有的事实。只输出 JSON，不要任何其他内容。";
 
 use crate::profile::Profile;
 
@@ -18,5 +19,6 @@ pub fn system_prompt(profile: Profile) -> Option<&'static str> {
         Profile::Bullets => Some(BULLETS_SYSTEM_PROMPT),
         Profile::Commit => Some(COMMIT_SYSTEM_PROMPT),
         Profile::Prompt => Some(PROMPT_SYSTEM_PROMPT),
+        Profile::Multi => Some(MULTI_SYSTEM_PROMPT),
     }
 }

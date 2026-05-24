@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -49,7 +50,7 @@ impl RewriteContext {
 pub struct RewriteResult {
     pub main: String,
     #[serde(default)]
-    pub variants: std::collections::HashMap<String, String>,
+    pub variants: HashMap<String, String>,
     pub trace: RewriteTrace,
 }
 
@@ -67,7 +68,7 @@ impl RewritePipeline for IdentityRewritePipeline {
         let trace = RewriteTrace::new(Profile::Off).with_preprocess_duration(started.elapsed());
         Ok(RewriteResult {
             main: pre.cleaned_text,
-            variants: std::collections::HashMap::new(),
+            variants: HashMap::new(),
             trace,
         })
     }
@@ -107,7 +108,7 @@ where
         if !selected_profile.should_call_llm() || preprocessed.cleaned_text.chars().count() < 5 {
             return Ok(RewriteResult {
                 main: preprocessed.cleaned_text,
-                variants: std::collections::HashMap::new(),
+                variants: HashMap::new(),
                 trace,
             });
         }
@@ -115,20 +116,25 @@ where
         let Some(system) = system_prompt(selected_profile) else {
             return Ok(RewriteResult {
                 main: preprocessed.cleaned_text,
-                variants: std::collections::HashMap::new(),
+                variants: HashMap::new(),
                 trace,
             });
         };
 
         trace.mark_llm_called();
         let llm_started = Instant::now();
+        let response_format = if selected_profile == Profile::Multi {
+            ResponseFormat::JsonObject
+        } else {
+            ResponseFormat::Text
+        };
         let result = self
             .llm
             .complete(ChatRequest {
                 model: ctx.model,
                 system: system.to_string(),
                 user: preprocessed.cleaned_text.clone(),
-                response_format: ResponseFormat::Text,
+                response_format,
                 timeout: ctx.timeout,
             })
             .await;
@@ -136,6 +142,27 @@ where
 
         match result {
             Ok(response) => {
+                if selected_profile == Profile::Multi {
+                    match parse_multi_response(&response.content) {
+                        Ok(variants) => {
+                            let main = variants.get("clean").cloned().unwrap_or_default();
+                            if main.trim().is_empty() {
+                                trace.mark_fallback("multi response missing clean output");
+                                return Ok(fallback(preprocessed.cleaned_text, trace));
+                            }
+                            return Ok(RewriteResult {
+                                main,
+                                variants,
+                                trace,
+                            });
+                        }
+                        Err(error) => {
+                            trace.mark_fallback(error);
+                            return Ok(fallback(preprocessed.cleaned_text, trace));
+                        }
+                    }
+                }
+
                 let rewritten = response.content.trim().to_string();
                 if rewritten.is_empty() {
                     trace.mark_fallback("llm returned empty output");
@@ -143,7 +170,7 @@ where
                 }
                 Ok(RewriteResult {
                     main: rewritten,
-                    variants: std::collections::HashMap::new(),
+                    variants: HashMap::new(),
                     trace,
                 })
             }
@@ -158,9 +185,29 @@ where
 fn fallback(main: String, trace: RewriteTrace) -> RewriteResult {
     RewriteResult {
         main,
-        variants: std::collections::HashMap::new(),
+        variants: HashMap::new(),
         trace,
     }
+}
+
+fn parse_multi_response(content: &str) -> Result<HashMap<String, String>, String> {
+    let value: serde_json::Value = serde_json::from_str(content)
+        .map_err(|e| format!("failed to parse multi profile JSON: {e}"))?;
+    let Some(object) = value.as_object() else {
+        return Err("multi profile JSON must be an object".to_string());
+    };
+
+    let mut variants = HashMap::new();
+    for key in ["clean", "polish", "wechat", "bullets"] {
+        let value = object
+            .get(key)
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .trim()
+            .to_string();
+        variants.insert(key.to_string(), value);
+    }
+    Ok(variants)
 }
 
 #[cfg(test)]
@@ -213,37 +260,49 @@ mod tests {
             (
                 Profile::Polish,
                 "我今天下午可能因地铁晚点而晚到十分钟，请老师不必等我。",
+                "我今天下午可能因地铁晚点而晚到十分钟，请老师不必等我。",
                 "润色",
             ),
             (
                 Profile::Email,
+                "老师您好：\n\n今天下午我可能因为地铁晚点会晚到十分钟，请您不必等我。\n\n谢谢老师。",
                 "老师您好：\n\n今天下午我可能因为地铁晚点会晚到十分钟，请您不必等我。\n\n谢谢老师。",
                 "邮件",
             ),
             (
                 Profile::Wechat,
                 "老师，今天下午地铁可能晚点，我会晚到十分钟，您不用等我。",
+                "老师，今天下午地铁可能晚点，我会晚到十分钟，您不用等我。",
                 "微信",
             ),
             (
                 Profile::Bullets,
+                "- 今天下午可能晚到十分钟\n- 原因是地铁晚点\n- 请老师不要等我",
                 "- 今天下午可能晚到十分钟\n- 原因是地铁晚点\n- 请老师不要等我",
                 "要点",
             ),
             (
                 Profile::Commit,
                 "feat(rewrite): add clean profile rewrite pipeline",
+                "feat(rewrite): add clean profile rewrite pipeline",
                 "Conventional Commit",
             ),
             (
                 Profile::Prompt,
                 "目标：实现一个语音输入改写管道。\n约束：保持 ASR 与 rewrite 解耦，并补充 mock 测试。\n输出：可运行的 Rust 代码和测试。",
+                "目标：实现一个语音输入改写管道。\n约束：保持 ASR 与 rewrite 解耦，并补充 mock 测试。\n输出：可运行的 Rust 代码和测试。",
                 "AI prompt",
+            ),
+            (
+                Profile::Multi,
+                r#"{"clean":"clean text","polish":"polish text","wechat":"wechat text","bullets":"- bullet"}"#,
+                "clean text",
+                "JSON",
             ),
         ];
 
-        for (profile, expected, prompt_marker) in cases {
-            let mock = MockLlmClient::ok(expected);
+        for (profile, llm_output, expected, prompt_marker) in cases {
+            let mock = MockLlmClient::ok(llm_output);
             let pipeline = LlmRewritePipeline::new(mock.clone());
             let result = pipeline
                 .process(
@@ -288,6 +347,62 @@ mod tests {
         assert_eq!(calls.len(), 1);
         assert!(calls[0].system.contains("邮件"));
         assert_eq!(calls[0].user, "下午晚到十分钟，让老师不要等我");
+    }
+
+    #[tokio::test]
+    async fn multi_profile_parses_json_variants() {
+        let mock = MockLlmClient::ok(
+            r#"{"clean":"我会晚到十分钟。","polish":"我可能会晚到十分钟，请不必等我。","wechat":"我会晚到十分钟，别等我啦。","bullets":"- 晚到十分钟\n- 不用等"}"#,
+        );
+        let pipeline = LlmRewritePipeline::new(mock.clone());
+        let result = pipeline
+            .process("嗯我会晚到十分钟让他别等我", context(Profile::Multi))
+            .await
+            .unwrap();
+
+        assert_eq!(result.main, "我会晚到十分钟。");
+        assert_eq!(
+            result.variants["polish"],
+            "我可能会晚到十分钟，请不必等我。"
+        );
+        assert_eq!(result.variants["wechat"], "我会晚到十分钟，别等我啦。");
+        assert_eq!(result.variants["bullets"], "- 晚到十分钟\n- 不用等");
+        let calls = mock.calls();
+        assert_eq!(calls[0].response_format, ResponseFormat::JsonObject);
+    }
+
+    #[tokio::test]
+    async fn multi_profile_falls_back_on_invalid_json() {
+        let mock = MockLlmClient::ok("不是 JSON");
+        let pipeline = LlmRewritePipeline::new(mock);
+        let result = pipeline
+            .process("嗯我会晚到十分钟让他别等我", context(Profile::Multi))
+            .await
+            .unwrap();
+
+        assert_eq!(result.main, "我会晚到十分钟让他别等我");
+        assert!(result.trace.fallback);
+        assert!(result
+            .trace
+            .error
+            .unwrap()
+            .contains("failed to parse multi profile JSON"));
+    }
+
+    #[tokio::test]
+    async fn multi_profile_allows_missing_optional_fields() {
+        let mock = MockLlmClient::ok(r#"{"clean":"我会晚到十分钟。"}"#);
+        let pipeline = LlmRewritePipeline::new(mock);
+        let result = pipeline
+            .process("嗯我会晚到十分钟让他别等我", context(Profile::Multi))
+            .await
+            .unwrap();
+
+        assert_eq!(result.main, "我会晚到十分钟。");
+        assert_eq!(result.variants["polish"], "");
+        assert_eq!(result.variants["wechat"], "");
+        assert_eq!(result.variants["bullets"], "");
+        assert!(!result.trace.fallback);
     }
 
     #[tokio::test]

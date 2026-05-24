@@ -13,6 +13,7 @@ pub enum Profile {
     Bullets,
     Commit,
     Prompt,
+    Multi,
 }
 
 impl Profile {
@@ -26,6 +27,7 @@ impl Profile {
             Self::Bullets => "bullets",
             Self::Commit => "commit",
             Self::Prompt => "prompt",
+            Self::Multi => "multi",
         }
     }
 
@@ -53,6 +55,7 @@ impl FromStr for Profile {
             "bullets" => Ok(Self::Bullets),
             "commit" => Ok(Self::Commit),
             "prompt" => Ok(Self::Prompt),
+            "multi" => Ok(Self::Multi),
             other => Err(ProfileParseError(other.to_string())),
         }
     }
@@ -77,6 +80,7 @@ mod tests {
         assert_eq!("bullets".parse::<Profile>().unwrap(), Profile::Bullets);
         assert_eq!("commit".parse::<Profile>().unwrap(), Profile::Commit);
         assert_eq!("prompt".parse::<Profile>().unwrap(), Profile::Prompt);
+        assert_eq!("multi".parse::<Profile>().unwrap(), Profile::Multi);
     }
 
     #[test]
@@ -89,5 +93,6 @@ mod tests {
         assert_eq!(Profile::Bullets.label(), "bullets");
         assert_eq!(Profile::Commit.label(), "commit");
         assert_eq!(Profile::Prompt.label(), "prompt");
+        assert_eq!(Profile::Multi.label(), "multi");
     }
 }

@@ -19,6 +19,7 @@ impl LlmClient for ExampleLlm {
             Profile::Bullets => bullets_example(&req.user),
             Profile::Commit => commit_example(&req.user),
             Profile::Prompt => prompt_example(&req.user),
+            Profile::Multi => multi_example(&req.user),
             Profile::Off => req.user,
         };
 
@@ -66,6 +67,24 @@ async fn demo_teacher_late_message_across_profiles() {
         "- 今天下午可能晚到十分钟左右\n- 原因是地铁晚点\n- 请老师不要等我",
     )
     .await;
+
+    let multi = rewrite(Profile::Multi, input).await;
+    assert_eq!(
+        multi.main,
+        "跟老师说一下，今天下午可能因为地铁晚点要晚到十分钟左右，让他不要等我。"
+    );
+    assert_eq!(
+        multi.variants["polish"],
+        "我想请老师知悉：今天下午我可能因地铁晚点而晚到十分钟左右，请老师不必等我。"
+    );
+    assert_eq!(
+        multi.variants["wechat"],
+        "老师，今天下午地铁可能晚点，我会晚到十分钟左右，您不用等我。"
+    );
+    assert_eq!(
+        multi.variants["bullets"],
+        "- 今天下午可能晚到十分钟左右\n- 原因是地铁晚点\n- 请老师不要等我"
+    );
 }
 
 #[tokio::test]
@@ -110,8 +129,16 @@ async fn demo_dictionary_applies_before_rewrite() {
 }
 
 async fn assert_rewrite(profile: Profile, input: &str, expected: &str) {
+    let result = rewrite(profile, input).await;
+
+    assert_eq!(result.main, expected, "profile={}", profile.label());
+    assert!(result.trace.llm_called);
+    assert!(!result.trace.fallback);
+}
+
+async fn rewrite(profile: Profile, input: &str) -> voice_rewrite::RewriteResult {
     let pipeline = LlmRewritePipeline::new(ExampleLlm);
-    let result = pipeline
+    pipeline
         .process(
             input,
             RewriteContext {
@@ -122,11 +149,7 @@ async fn assert_rewrite(profile: Profile, input: &str, expected: &str) {
             },
         )
         .await
-        .unwrap();
-
-    assert_eq!(result.main, expected, "profile={}", profile.label());
-    assert!(result.trace.llm_called);
-    assert!(!result.trace.fallback);
+        .unwrap()
 }
 
 fn profile_from_prompt(system: &str) -> Profile {
@@ -140,6 +163,8 @@ fn profile_from_prompt(system: &str) -> Profile {
         Profile::Commit
     } else if system.contains("AI prompt") {
         Profile::Prompt
+    } else if system.contains("JSON") {
+        Profile::Multi
     } else if system.contains("润色") {
         Profile::Polish
     } else {
@@ -179,4 +204,14 @@ fn commit_example(_: &str) -> String {
 fn prompt_example(_: &str) -> String {
     "目标：为语音输入项目实现一个改写引擎。\n上下文：当前优先支持文字到文字的纯文本流程。\n约束：先不要实现 GUI；补充覆盖多种润色效果的测试。\n期望输出：可运行的 rewrite 引擎代码、CLI 调试入口和测试用例。"
         .to_string()
+}
+
+fn multi_example(_: &str) -> String {
+    serde_json::json!({
+        "clean": "跟老师说一下，今天下午可能因为地铁晚点要晚到十分钟左右，让他不要等我。",
+        "polish": "我想请老师知悉：今天下午我可能因地铁晚点而晚到十分钟左右，请老师不必等我。",
+        "wechat": "老师，今天下午地铁可能晚点，我会晚到十分钟左右，您不用等我。",
+        "bullets": "- 今天下午可能晚到十分钟左右\n- 原因是地铁晚点\n- 请老师不要等我"
+    })
+    .to_string()
 }

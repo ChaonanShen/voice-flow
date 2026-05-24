@@ -141,6 +141,10 @@ fn command_regexes() -> &'static [(Profile, Regex)] {
                     .expect("valid prompt command regex"),
             ),
             (
+                Profile::Multi,
+                Regex::new(r"(多版本|多个版本|给我几个版本)").expect("valid multi command regex"),
+            ),
+            (
                 Profile::Clean,
                 Regex::new(r"(改短一点|压缩一下|翻译成英文|改成英文)")
                     .expect("valid clean command regex"),
@@ -216,6 +220,11 @@ mod tests {
                 "写成 prompt 做一个改写引擎",
                 Profile::Prompt,
                 "做一个改写引擎",
+            ),
+            (
+                "给我几个版本 下午晚到十分钟",
+                Profile::Multi,
+                "下午晚到十分钟",
             ),
         ];
 
