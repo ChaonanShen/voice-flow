@@ -35,10 +35,11 @@ select {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   gap: 8px;
+  place-items: center;
   width: 100%;
   min-width: 0;
   height: 100%;
-  padding: 8px;
+  padding: 10px;
 }
 
 .mode-nav {
@@ -168,47 +169,72 @@ h1 {
 .floating-panel {
   display: grid;
   justify-items: center;
-  gap: 5px;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  gap: 0;
   min-width: 0;
   min-height: 0;
 }
 
-.floating-drag-handle {
-  width: 34px;
-  height: 5px;
-  border-radius: 999px;
-  background: rgba(89, 101, 121, 0.35);
-}
-
-.mic-row {
-  display: grid;
-  grid-template-columns: 72px 28px;
-  gap: 8px;
-  align-items: start;
-  justify-content: center;
-}
-
 .mic-button {
+  position: relative;
+  isolation: isolate;
   display: grid;
-  width: 72px;
-  height: 72px;
+  width: 76px;
+  height: 76px;
   place-items: center;
   border: 1px solid #cfd7e3;
   border-radius: 50%;
   background: #ffffff;
   box-shadow: 0 10px 24px rgba(23, 33, 43, 0.14);
   cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    transform 140ms ease;
+}
+
+.mic-button::before {
+  position: absolute;
+  inset: -7px;
+  z-index: -1;
+  border-radius: 50%;
+  background: rgba(217, 45, 32, 0.2);
+  content: "";
+  opacity: 0;
 }
 
 .mic-button[data-state="recording"] {
-  border-color: #f0aaa3;
-  background: #fff5f3;
+  border-color: #dc2626;
+  background: #dc2626;
+  box-shadow:
+    0 12px 28px rgba(220, 38, 38, 0.32),
+    0 0 0 5px rgba(220, 38, 38, 0.16);
+  transform: scale(1.03);
+}
+
+.mic-button[data-state="recording"]::before {
+  animation: recording-pulse 1.15s ease-out infinite;
+  opacity: 1;
 }
 
 .mic-button[data-state="transcribing"],
 .mic-button[data-state="rewriting"] {
-  border-color: #9bbcff;
-  background: #f4f8ff;
+  border-color: #2563eb;
+  background: #2563eb;
+  box-shadow:
+    0 12px 28px rgba(37, 99, 235, 0.28),
+    0 0 0 5px rgba(37, 99, 235, 0.14);
+}
+
+.mic-button[data-state="completed"] {
+  border-color: #14804a;
+  background: #14804a;
+  box-shadow:
+    0 12px 28px rgba(20, 128, 74, 0.26),
+    0 0 0 5px rgba(20, 128, 74, 0.14);
 }
 
 .mic-button[data-paused="true"] {
@@ -217,8 +243,11 @@ h1 {
 }
 
 .mic-button[data-state="error"] {
-  border-color: #f3c3bd;
-  background: #fff7f5;
+  border-color: #991b1b;
+  background: #991b1b;
+  box-shadow:
+    0 12px 28px rgba(153, 27, 27, 0.3),
+    0 0 0 5px rgba(153, 27, 27, 0.14);
 }
 
 .mic-icon {
@@ -227,6 +256,7 @@ h1 {
   height: 34px;
   border: 3px solid #243344;
   border-radius: 14px;
+  transition: border-color 140ms ease;
 }
 
 .mic-icon::before {
@@ -240,6 +270,7 @@ h1 {
   border-radius: 0 0 14px 14px;
   content: "";
   transform: translateX(-50%);
+  transition: border-color 140ms ease;
 }
 
 .mic-icon::after {
@@ -251,18 +282,31 @@ h1 {
   background: #243344;
   content: "";
   transform: translateX(-50%);
+  transition: background-color 140ms ease;
 }
 
-.floating-settings {
-  display: grid;
-  width: 28px;
-  height: 28px;
-  place-items: center;
-  border: 1px solid #d8dee8;
-  border-radius: 50%;
+.mic-button[data-state="recording"] .mic-icon,
+.mic-button[data-state="transcribing"] .mic-icon,
+.mic-button[data-state="rewriting"] .mic-icon,
+.mic-button[data-state="completed"] .mic-icon,
+.mic-button[data-state="error"] .mic-icon {
+  border-color: #ffffff;
+}
+
+.mic-button[data-state="recording"] .mic-icon::before,
+.mic-button[data-state="transcribing"] .mic-icon::before,
+.mic-button[data-state="rewriting"] .mic-icon::before,
+.mic-button[data-state="completed"] .mic-icon::before,
+.mic-button[data-state="error"] .mic-icon::before {
+  border-color: #ffffff;
+}
+
+.mic-button[data-state="recording"] .mic-icon::after,
+.mic-button[data-state="transcribing"] .mic-icon::after,
+.mic-button[data-state="rewriting"] .mic-icon::after,
+.mic-button[data-state="completed"] .mic-icon::after,
+.mic-button[data-state="error"] .mic-icon::after {
   background: #ffffff;
-  color: #596579;
-  cursor: pointer;
 }
 
 .floating-summary {
@@ -305,6 +349,23 @@ h1 {
   text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+@keyframes recording-pulse {
+  0% {
+    opacity: 0.75;
+    transform: scale(0.9);
+  }
+
+  70% {
+    opacity: 0;
+    transform: scale(1.28);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(1.28);
+  }
 }
 
 .result-meta {

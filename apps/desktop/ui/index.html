@@ -43,20 +43,18 @@
 
       <section class="mode-pane" data-mode-pane="floating" aria-label="Floating Input">
         <section class="floating-panel" aria-label="Floating Input status">
-          <div class="floating-drag-handle" data-tauri-drag-region="deep" aria-hidden="true"></div>
-          <div class="mic-row">
-            <button id="mic-button" class="mic-button" type="button" title="点击开始/结束；Alt+Space 按住说话">
-              <span class="mic-icon" aria-hidden="true"></span>
-            </button>
-            <button id="floating-settings" class="floating-settings" type="button" title="Settings">
-              <span aria-hidden="true">...</span>
-            </button>
-          </div>
+          <button
+            id="mic-button"
+            class="mic-button"
+            type="button"
+            aria-label="Floating microphone"
+            title="点击开始/结束；Alt+Space 按住说话"
+          >
+            <span class="mic-icon" aria-hidden="true"></span>
+          </button>
 
-          <div class="floating-summary">
-            <span id="rewrite-chip">改写关闭</span>
-            <span id="last-transcript">尚无识别结果</span>
-          </div>
+          <span id="rewrite-chip" hidden>改写关闭</span>
+          <span id="last-transcript" hidden>尚无识别结果</span>
 
           <div class="result-meta" id="result-meta" hidden>
             <span id="fallback-reason"></span>
