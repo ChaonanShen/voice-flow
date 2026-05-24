@@ -44,15 +44,16 @@
 
 ### 2.1 结论先行
 
-**默认顶配跑通，再调优**：v1 默认 **Claude Opus 4.7** 走 Anthropic 兼容 OpenAI 端点；同时支持 OpenAI **GPT 顶配模型**；国内网络兜底用 DashScope **Qwen 顶配模型**（与 Step 8 复用同一个 API key 账户体系）。
+**默认走 DeepSeek**，国产、便宜、OpenAI 兼容、中文母语强。已在 2026-05-24 用真实 key 通过 curl 验证 chat completion + JSON mode 两种调用模式可用（实测记录见 §3）。
 
-| 角色 | 默认模型 | Provider |
-|---|---|---|
-| Demo / 验收主用 | `claude-opus-4-7` | Anthropic（OpenAI 兼容） |
-| 备选（更快、英文偏好场景） | `gpt-5.5`（占位，按发布版调整） | OpenAI |
-| 国内网络兜底 | `qwen-max`（顶配 Qwen） | DashScope（OpenAI 兼容） |
+| 角色 | 默认模型 | Provider | 备注 |
+|---|---|---|---|
+| **默认 / demo 主用** | `deepseek-chat` | DeepSeek | 后端别名自动路由到当前最新版（实测打到 `deepseek-v4-flash`） |
+| 备选（同源、与 Step 8 复用 key） | `qwen-plus` / `qwen-max` | DashScope | 阿里云百炼 OpenAI 兼容端点 |
+| 可选（最强中文长文 / 英文） | `claude-opus-4-7` | Anthropic 原生 messages API | 仅当用户主动切到 anthropic 时启用 |
+| 可选 | `gpt-5.5`（占位） | OpenAI | 同上 |
 
-> **黑客松策略：先用最强的模型把质量天花板打出来，让 demo 改写效果最好看；后续 PR 再加"省钱档"切到 `claude-haiku-4-5` / `qwen-plus` / `qwen-flash`，作为延迟和成本优化点。**
+> **黑客松策略**：不在"贵但好"和"便宜够用"之间反复挣扎——DeepSeek 在改写任务上已经够用且便宜得"可以随意调"。架构层留多 provider 切换能力（demo 可以演示），但默认装出来就是 DeepSeek。
 
 ### 2.2 统一抽象：一个 trait 罩住所有 provider
 
@@ -73,45 +74,302 @@ pub struct ChatRequest {
 }
 ```
 
-Anthropic / OpenAI / DashScope 都有 OpenAI 兼容的 chat completions 端点，**统一用一份 reqwest 实现 `OpenAiCompatClient`**，只是 `base_url` 和 `model` 不同。这样换 provider = 改配置，**不改代码**。
+DeepSeek / OpenAI / DashScope 都暴露 **OpenAI 兼容**的 `/v1/chat/completions`，**统一用一份 reqwest 实现 `OpenAiCompatClient`**，只是 `base_url`、`model`、authorization header 略有差异。换 provider = 改配置，**不改代码**。
 
-| Provider | Base URL | 备注 |
-|---|---|---|
-| Anthropic | `https://api.anthropic.com/v1`（OpenAI 兼容） | header `x-api-key`，需要 `anthropic-version` |
-| OpenAI | `https://api.openai.com/v1` | header `Authorization: Bearer` |
-| DashScope | `https://dashscope.aliyuncs.com/compatible-mode/v1` | header `Authorization: Bearer` |
+Anthropic 是唯一例外：它官方 `/v1/messages` 不是严格 OpenAI 兼容（请求体结构、stream 协议、`response_format` 字段都不同），第二实现单独写。但 Anthropic 是 §2.1 表里**最低优先级**，Day 1 / Day 2 不需要。
+
+| Provider | Base URL | Auth header | OpenAI 兼容？ |
+|---|---|---|---|
+| **DeepSeek**（默认） | `https://api.deepseek.com/v1` | `Authorization: Bearer $KEY` | ✅ 完全兼容（含 `response_format: json_object`） |
+| DashScope | `https://dashscope.aliyuncs.com/compatible-mode/v1` | `Authorization: Bearer $KEY` | ✅ 完全兼容 |
+| OpenAI | `https://api.openai.com/v1` | `Authorization: Bearer $KEY` | ✅ 本家 |
+| Anthropic | `https://api.anthropic.com/v1/messages` | `x-api-key`, `anthropic-version` | ❌ 单独实现 |
 
 > **DashScope 的 OpenAI 兼容端点和 Step 8 用的 paraformer-realtime WebSocket 端点不是同一个。** 同一个 API key 可以复用，但 **client 类型完全分开**——Step 8 的 `voice-asr-cloud::DashScopeClient` 不要碰、不要复用。`voice-rewrite` 自己一套 HTTP client。
 
 ### 2.3 默认与切换
 
-- **配置默认 `provider = "anthropic"`，`model = "claude-opus-4-7"`**
-- 用户在设置面板可切到 `openai` 或 `dashscope`，模型名是文本框
-- 设置面板录入对应 provider 的 API key（每个 provider 单独存）
-- 如果当前 provider 的 key 未配置，桌面端给一个非阻塞提示，pipeline 自动兜底 `off`
+- **配置默认 `provider = "deepseek"`，`model = "deepseek-chat"`**
+- 用户在设置面板可切到 `dashscope` / `openai` / `anthropic`，模型名是文本框
+- 设置面板录入对应 provider 的 API key（每个 provider 单独存；Day 1 用 env / `.env`，Day 2 用 keyring）
+- 如果当前 provider 的 key 未配置，桌面端给一个非阻塞提示，pipeline 自动兜底原文输出
 
 ### 2.4 价格 / 延迟参考（v1 不优化，仅记录）
 
-| 模型 | 输入 | 输出 | 首 token 经验值 |
+一段 200 字中文原文，input ≈ 150 token、output ≈ 100 token（参考 §3 实测）：
+
+| 模型 | 单次成本 | 1000 次成本 | 首 token 经验值 |
 |---|---|---|---|
-| `claude-opus-4-7` | ~$15/M | ~$75/M | ~500~1000ms |
-| `gpt-5.5`（占位） | 按官方 | 按官方 | ~500~1000ms |
-| `qwen-max` | ~¥40/M | ~¥120/M | ~400~800ms |
+| `deepseek-chat`（默认） | ~¥0.0005 | **~¥0.5** | ~300~600ms |
+| `qwen-plus` | ~¥0.005 | ~¥5 | ~400~800ms |
+| `qwen-max` | ~¥0.05 | ~¥50 | ~400~800ms |
+| `claude-opus-4-7` | ~¥0.4 | ~¥400 | ~500~1000ms |
 
-一段 200 字中文原文，input 大约 400 token、output 大约 400 token：
-
-- Opus：每次 ~¥0.4 RMB
-- Qwen-max：每次 ~¥0.05 RMB
-
-**黑客松 demo 调用次数 ~50 次，总成本 < ¥30**，可以接受。后续做"省钱档"切到 haiku/flash 是 §10 删减线之外的优化项。
+**黑客松 demo 调用次数估计 ~200 次，DeepSeek 总成本 < ¥0.5**。"随意调"不是夸张——本地开发跑全测试套件也烧不出一杯奶茶钱。
 
 ---
 
-## 3. 数据流与模块边界
+## 3. HTTP 调用样例（已实测）
+
+### 3.1 实测记录（2026-05-24，本地 curl）
+
+用 `.env` 里的 `DEEPSEEK_API_KEY` 直接打 DeepSeek 的 OpenAI 兼容端点，两个核心场景都跑通。
+
+#### 场景 A：单段改写（clean profile）
+
+请求：
+
+```http
+POST https://api.deepseek.com/v1/chat/completions
+Authorization: Bearer $DEEPSEEK_API_KEY
+Content-Type: application/json
+
+{
+  "model": "deepseek-chat",
+  "messages": [
+    {"role": "system", "content": "你是一个把口语转写改写成清晰文本的助手。去掉口头禅，补标点，保留原意。只输出改写后的文本本体，不要解释。"},
+    {"role": "user", "content": "嗯我今天下午可能会晚到十分钟然后帮我跟老师说一下"}
+  ],
+  "temperature": 0.3,
+  "max_tokens": 200
+}
+```
+
+响应（截取关键字段）：
+
+```json
+{
+  "model": "deepseek-v4-flash",
+  "choices": [{
+    "message": {
+      "role": "assistant",
+      "content": "我今天下午可能会晚到十分钟，帮我跟老师说一下。"
+    },
+    "finish_reason": "stop"
+  }],
+  "usage": {"prompt_tokens": 51, "completion_tokens": 12, "total_tokens": 63}
+}
+```
+
+**观察**：
+- 请求 `model: "deepseek-chat"` → 响应 `model: "deepseek-v4-flash"`。`deepseek-chat` 是稳定别名，DeepSeek 后端自动路由到当前最新版。配置里写 `deepseek-chat` 即可，**不要**写 `deepseek-v4-flash` 这种带版本号的名字。
+- 改写质量符合 `clean` profile 预期：去口头禅、补标点、保留原意。
+- 51 + 12 = 63 token，单次成本 < ¥0.001。
+
+#### 场景 B：multi 档结构化输出（JSON mode）
+
+加 `response_format: {"type": "json_object"}` 即可强制 JSON 输出：
+
+```json
+{
+  "model": "deepseek-chat",
+  "messages": [
+    {"role": "system", "content": "你是一个把口语转写成多种成品文本的助手。请按以下 JSON 结构返回 4 个版本：{\"clean\":\"...\",\"polish\":\"...\",\"wechat\":\"...\",\"bullets\":\"...\"}。约束：保留所有人名、地名、英文专有名词、数字；不要编造原文没有的事实。只输出 JSON，不要任何其他内容。"},
+    {"role": "user", "content": "嗯我今天下午可能因为地铁晚点会晚到十分钟，让老师不要等我"}
+  ],
+  "response_format": {"type": "json_object"},
+  "temperature": 0.5,
+  "max_tokens": 500
+}
+```
+
+响应内容（已 `JSON.parse(choices[0].message.content)`）：
+
+```json
+{
+  "clean":   "我今天下午可能因为地铁晚点会晚到十分钟，让老师不要等我。",
+  "polish":  "我今天下午可能因地铁晚点而晚到十分钟，请老师不必等我。",
+  "wechat":  "今天下午地铁可能晚点，我会晚到十分钟，让老师别等我了。",
+  "bullets": "- 今天下午可能晚到十分钟\n- 原因是地铁晚点\n- 请老师不要等我"
+}
+```
+
+**观察**：
+- JSON 严格合法，可直接 `serde_json::from_str` 解析
+- 4 字段风格区分清晰，数字"十分钟"全部保留，人称"老师"保留
+- 153 + 102 = 255 token，单次成本 < ¥0.002
+
+### 3.2 Rust 端调用流程（v1 设计）
+
+代码侧基本就是把上面 curl 的事情用 reqwest 包一下。**整个 `LlmClient` v1 实现大约 80 行 Rust**：
+
+```rust
+// crates/voice-rewrite/src/llm/openai_compat.rs（v1 设计示意）
+
+use reqwest::Client;
+use serde::{Deserialize, Serialize};
+use std::time::Duration;
+
+pub struct OpenAiCompatClient {
+    http: Client,
+    base_url: String,
+    api_key: String,
+    default_timeout: Duration,
+}
+
+impl OpenAiCompatClient {
+    pub fn new(base_url: String, api_key: String) -> Self {
+        Self {
+            http: Client::builder()
+                .timeout(Duration::from_secs(30))
+                .build()
+                .unwrap(),
+            base_url,
+            api_key,
+            default_timeout: Duration::from_secs(5),
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct ChatCompletionRequest<'a> {
+    model: &'a str,
+    messages: Vec<ChatMessage<'a>>,
+    temperature: f32,
+    max_tokens: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    response_format: Option<ResponseFormat>,
+}
+
+#[derive(Serialize)]
+struct ChatMessage<'a> {
+    role: &'a str,    // "system" | "user" | "assistant"
+    content: &'a str,
+}
+
+#[derive(Serialize)]
+struct ResponseFormat {
+    #[serde(rename = "type")]
+    kind: &'static str,  // "json_object" | "text"
+}
+
+#[derive(Deserialize)]
+struct ChatCompletionResponse {
+    model: String,
+    choices: Vec<Choice>,
+    usage: Usage,
+}
+
+#[derive(Deserialize)]
+struct Choice {
+    message: ResponseMessage,
+    finish_reason: String,
+}
+
+#[derive(Deserialize)]
+struct ResponseMessage {
+    content: String,
+}
+
+#[derive(Deserialize)]
+struct Usage {
+    prompt_tokens: u32,
+    completion_tokens: u32,
+    total_tokens: u32,
+}
+
+#[async_trait::async_trait]
+impl LlmClient for OpenAiCompatClient {
+    async fn complete(&self, req: ChatRequest) -> Result<ChatResponse, LlmError> {
+        let url = format!("{}/chat/completions", self.base_url);
+
+        let body = ChatCompletionRequest {
+            model: &req.model,
+            messages: vec![
+                ChatMessage { role: "system", content: &req.system },
+                ChatMessage { role: "user",   content: &req.user },
+            ],
+            temperature: req.temperature.unwrap_or(0.3),
+            max_tokens: req.max_tokens.unwrap_or(800),
+            response_format: match req.response_format {
+                ResponseFormatKind::JsonObject => Some(ResponseFormat { kind: "json_object" }),
+                ResponseFormatKind::Text => None,
+            },
+        };
+
+        let resp = tokio::time::timeout(req.timeout, async {
+            self.http
+                .post(&url)
+                .bearer_auth(&self.api_key)
+                .json(&body)
+                .send()
+                .await?
+                .error_for_status()?
+                .json::<ChatCompletionResponse>()
+                .await
+        })
+        .await
+        .map_err(|_| LlmError::Timeout)?
+        .map_err(LlmError::from_reqwest)?;
+
+        let content = resp.choices.into_iter().next()
+            .ok_or(LlmError::EmptyResponse)?
+            .message.content;
+
+        Ok(ChatResponse {
+            content,
+            tokens_in: resp.usage.prompt_tokens,
+            tokens_out: resp.usage.completion_tokens,
+            actual_model: resp.model,
+        })
+    }
+}
+```
+
+### 3.3 三个 OpenAI 兼容 provider 的复用
+
+DeepSeek / DashScope / OpenAI 三家直接复用同一个 `OpenAiCompatClient`，**只有构造参数不同**：
+
+```rust
+// DeepSeek（默认）
+OpenAiCompatClient::new(
+    "https://api.deepseek.com/v1".to_string(),
+    env::var("DEEPSEEK_API_KEY")?,
+)
+
+// DashScope
+OpenAiCompatClient::new(
+    "https://dashscope.aliyuncs.com/compatible-mode/v1".to_string(),
+    env::var("DASHSCOPE_API_KEY")?,
+)
+
+// OpenAI
+OpenAiCompatClient::new(
+    "https://api.openai.com/v1".to_string(),
+    env::var("OPENAI_API_KEY")?,
+)
+```
+
+### 3.4 Anthropic（独立实现，Day 1 / Day 2 不做）
+
+Anthropic 原生 `/v1/messages` 的请求体 / 响应体 schema 不同：
+- 用 `system` 字段（顶层），不放在 `messages` 数组
+- header 是 `x-api-key` + `anthropic-version`，不是 `Authorization: Bearer`
+- 没有 `response_format` 字段，JSON mode 靠 prompt 强约束（或用 tool use）
+
+如果要支持，**单独写 80 行 `AnthropicClient`**，不复用 `OpenAiCompatClient`。Day 3 视进度再决定要不要做。
+
+### 3.5 .env 加载机制
+
+进程启动时（CLI 入口、桌面 main、tests），用 `dotenvy` crate 把 `.env` 内容加载到 `std::env`：
+
+```rust
+// crates/voice-cli/src/main.rs（入口示意）
+fn main() {
+    let _ = dotenvy::dotenv();  // 找不到 .env 不报错，由后续读取 env 的代码兜底
+    // ...
+}
+```
+
+读取顺序见 [.env.example](./.env.example) 顶部注释：keyring > 进程 env > .env 文件。
+
+---
+
+## 4. 数据流与模块边界
 
 **核心原则：AI 改写是"文字→文字"，不接触音频。** 它和 ASR 是顺序流水线上的两个独立阶段，代码上严格分到不同 crate、不同 trait、不同测试集，互不知道对方的存在。
 
-### 3.1 全链路数据流（按域分两段）
+### 4.1 全链路数据流（按域分两段）
 
 ```
 ┌─────────────────────────── 音频域 (audio domain) ────────────────────────────┐
@@ -167,7 +425,7 @@ Anthropic / OpenAI / DashScope 都有 OpenAI 兼容的 chat completions 端点�
               └────────────────────────────────────┘
 ```
 
-### 3.2 域 → crate 映射
+### 4.2 域 → crate 映射
 
 | 域 | 输入类型 | 输出类型 | crate | 是否依赖系统 |
 |---|---|---|---|---|
@@ -183,7 +441,7 @@ Anthropic / OpenAI / DashScope 都有 OpenAI 兼容的 chat completions 端点�
 3. **替换 ASR 引擎不影响改写**，替换 LLM provider 不影响 ASR。两条独立的技术线，独立演进。
 4. **`voice-core` 是唯一的"胶水"**：它在 `push_to_talk` 流程里同时持有 `Box<dyn AsrEngine>` 和 `Box<dyn RewritePipeline>`，按顺序调用。改写为 None 时退化到现有 Step 5 行为。
 
-### 3.3 trait 边界（代码骨架）
+### 4.3 trait 边界（代码骨架）
 
 ```rust
 // voice-asr-local / voice-asr-cloud（已有）
@@ -211,9 +469,9 @@ pub struct RewriteResult {
 }
 ```
 
-`RewriteTrace` 是后面 UI（§7 的 R3.4）和测试断言都要用的，建议从 R1.2 就埋好字段，后续 PR 只往里填东西。
+`RewriteTrace` 是后面 UI（§9 的 R3.4）和测试断言都要用的，建议从 R1.2 就埋好字段，后续 PR 只往里填东西。
 
-### 3.4 voice-core 串联点
+### 4.4 voice-core 串联点
 
 只在 **一个位置** 调改写：
 
@@ -231,7 +489,7 @@ paste.simulate()?;
 
 `rewrite_pipeline = None` 时整条链路退化到现在的 Step 5 行为，零开销。
 
-### 3.5 测试视角下的边界
+### 4.5 测试视角下的边界
 
 | 测试集 | 跑在哪 | 依赖 |
 |---|---|---|
@@ -240,13 +498,13 @@ paste.simulate()?;
 | `voice-core::push_to_talk` 改写集成 | Linux 也能跑 | 用 `FileCapture` + `MockAsrEngine` + `MockRewritePipeline` |
 | 完整链路 | 仅 Windows | 真麦克风 + 真 ASR + 真 LLM |
 
-测试样例细节见 §12。
+测试样例细节见 §13。
 
 ---
 
-## 4. 架构落点
+## 5. 架构落点
 
-### 4.1 新增 crate
+### 5.1 新增 crate
 
 新建 `crates/voice-rewrite/`（plan.md §13 已经占位）：
 
@@ -276,20 +534,20 @@ voice-rewrite/
 
 放在 `Cargo.toml workspace.members` 第 5 个成员。**严禁**在 `[dependencies]` 出现 `voice-asr-local` / `voice-asr-cloud` / `cpal` / `sherpa-onnx`。
 
-### 4.2 voice-core 改动
+### 5.2 voice-core 改动
 
 - `RealtimeState` 新增 `Rewriting`（在 `Transcribing` 和 `Completed` 之间）
 - `engine.rs` 不动；改写不是 ASR engine 的一部分，**挂在 ASR 之后**
 - 新增 `text_pipeline.rs`：把 `transcript: String` + `RewriteSettings` 喂给 `RewritePipeline`，返回最终文本
 - 现有 push_to_talk 流程里，在 ASR 出文本后、写剪贴板前插入一次 `pipeline.process()`
 
-### 4.3 桌面壳改动
+### 5.3 桌面壳改动
 
 - 设置面板新增"AI 改写"分组（开关、Provider、Model、Profile、API key、custom prompt）
 - 悬浮窗状态加 `Rewriting`（前端字串："改写中..."）
 - 悬浮窗加"最近文本"多版本切换标签（multi 档启用时显示）
 
-### 4.4 配置形态
+### 5.4 配置形态
 
 `%APPDATA%\voice-flow\app.toml` 扩展：
 
@@ -297,13 +555,14 @@ voice-rewrite/
 [rewrite]
 enabled = false                          # 默认关；用户自己显式开
 default_profile = "clean"                # 默认档
-provider = "anthropic"                   # anthropic | openai | dashscope
-model = "claude-opus-4-7"                # 默认顶配；可换 gpt-5.5 / qwen-max
-timeout_ms = 5000                        # 顶配模型稍宽容，5s 兜底
-api_key_ref = "system-keyring"           # 实际密钥进 keyring，不写明文
+provider = "deepseek"                    # deepseek | dashscope | openai | anthropic
+model = "deepseek-chat"                  # 稳定别名，自动路由到当前最新版
+timeout_ms = 4000                        # DeepSeek 单段 ~1s，4s 兜底足够；multi 偶尔到 3s
+api_key_ref = "system-keyring"           # 桌面端 keyring；CLI / 测试 fallback 到 env / .env
 
 # 不同 provider 的 key 单独存（设置面板每个 provider 一个输入框）
-# keyring 里的 key 名称约定：voice-flow:anthropic、voice-flow:openai、voice-flow:dashscope
+# keyring 里的 key 名称约定：voice-flow:deepseek、voice-flow:dashscope、voice-flow:openai、voice-flow:anthropic
+# 对应 env 变量名：    DEEPSEEK_API_KEY、DASHSCOPE_API_KEY、OPENAI_API_KEY、ANTHROPIC_API_KEY
 
 [rewrite.user_dictionary]
 # 用户专有名词 / 易错词替换。preprocess 在 LLM 之前 apply
@@ -316,15 +575,15 @@ api_key_ref = "system-keyring"           # 实际密钥进 keyring，不写明�
 system_prompt = ""                       # 高级用户自己写
 ```
 
-API key 不写 TOML 明文。Windows 用 `keyring` crate 走 Windows Credential Manager。
+桌面端 API key 默认走 keyring（Windows Credential Manager）；CLI / 单元测试可直接读 env / `.env`。
 
 ---
 
-## 5. 改写档（Profile）清单
+## 6. 改写档（Profile）清单
 
-下面是 v1 落地的档位。`off` 之外的每档都对应一个 system prompt（§7 给出）。
+下面是 v1 落地的档位。`off` 之外的每档都对应一个 system prompt（§8 给出）。
 
-**v1 阶段所有档共用配置里的同一个 `model`**（默认 `claude-opus-4-7`），不分快档/慢档。后续 PR 再加 `fast_model` / `quality_model` 路由，做"省钱档"优化。
+**v1 阶段所有档共用配置里的同一个 `model`**（默认 `deepseek-chat`），不分快档/慢档——DeepSeek 一档便宜得不需要分流。后续如果切到更贵的 provider，再加 `fast_model` / `quality_model` 路由。
 
 | Profile | 用途 | 输出形态 |
 |---|---|---|
@@ -343,9 +602,9 @@ API key 不写 TOML 明文。Windows 用 `keyring` crate 走 Windows Credential 
 
 ---
 
-## 6. 编排管道（创新点）
+## 7. 编排管道（创新点）
 
-### 6.1 完整流程
+### 7.1 完整流程
 
 ```
 ASR 原始文本
@@ -376,7 +635,7 @@ ASR 原始文本
     - 多版本面板异步显示，用户可点击复制任一版本
 ```
 
-### 6.2 三个值得喊出口号的编排细节
+### 7.2 三个值得喊出口号的编排细节
 
 | 编排点 | 为什么是创新 |
 |---|---|
@@ -384,36 +643,36 @@ ASR 原始文本
 | **语音命令在 ASR 流里识别，不靠 UI** | 用户说"改正式一点，写邮件"就能切档，不用切换 Profile 下拉 |
 | **多版本一次 LLM 调用** | 用 JSON 结构化输出，1 次调用拿 4 个版本，比 4 次并行调用便宜 + 快 |
 
-### 6.3 延迟 budget
+### 7.3 延迟 budget
 
-目标（中文 200 字原文，默认顶配模型 `claude-opus-4-7`）：
+目标（中文 200 字原文，默认 `deepseek-chat`）：
 
 | 阶段 | 预算 |
 |---|---|
 | ASR（已实现） | 本地 200~500ms |
 | 预处理 | <10ms |
-| LLM 首 token | 顶配 500~1000ms |
-| LLM 完整生成 | 1500~3000ms |
+| LLM 首 token | 300~600ms |
+| LLM 完整生成 | 800~2000ms |
 | 后处理 | <5ms |
 | 粘贴 | <50ms |
 | **改写档关闭** | 与现在持平 |
-| **clean / polish / wechat 等单段** | ASR + 2~3s |
-| **multi（JSON 4 字段）** | ASR + 3~4s |
+| **clean / polish / wechat 等单段** | ASR + 1~2s |
+| **multi（JSON 4 字段）** | ASR + 2~3s |
 
-`timeout_ms` 默认 5000，超时全部兜底原文。后续切到 haiku/flash 后预算可以砍半。
+`timeout_ms` 默认 4000，超时全部兜底原文。切到 Anthropic Opus 等更慢的 provider 时，pipeline 自动用配置里的更大 `timeout_ms`。
 
 ---
 
-## 7. Prompt 设计
+## 8. Prompt 设计
 
-### 7.1 通用规则
+### 8.1 通用规则
 
 - 每个 Profile 一份 system prompt，**编译进二进制**（`include_str!`），不读运行时文件
 - 用户原文作为单独 user message，不和 system 拼接（防 prompt injection）
 - system prompt 末尾固定加："只输出改写后的文本本体。不要解释、不要 markdown 包裹、不要前缀。如果你无法改写，原样输出输入。"
 - 不传任何对话历史 / 上下文，**每次都是 zero-shot**
 
-### 7.2 示例：clean profile system prompt
+### 8.2 示例：clean profile system prompt
 
 ```
 你是一个把口语自动写成清晰文本的助手。
@@ -435,7 +694,7 @@ ASR 原始文本
 只输出改写后的文本本体。不要解释、不要 markdown 包裹、不要前缀。
 ```
 
-### 7.3 示例：multi profile（结构化）
+### 8.3 示例：multi profile（结构化）
 
 ```
 你是一个把口语转写成多种成品文本的助手。
@@ -457,7 +716,7 @@ ASR 原始文本
 只输出 JSON，不要任何其他内容。
 ```
 
-### 7.4 语音命令映射
+### 8.4 语音命令映射
 
 预处理层用正则识别（顺序匹配，命中即停止）：
 
@@ -475,60 +734,90 @@ ASR 原始文本
 
 ---
 
-## 8. 三天 PR 拆分
+## 9. 三天 PR 拆分
 
-风格对齐 [plan.md](./plan.md) §6（单一职责、≈300 行、Conventional Commit）。下面每一行是一个 PR。
+风格对齐 [plan.md](./plan.md) §6（单一职责、≈300 行、Conventional Commit）。
 
-### Day 1：跑通最小链路（rewrite=clean，默认 Anthropic Opus）
+### 9.0 拆分粒度说明（重要）
+
+**下面表格里每一行是一个"功能单位"，不是一个 PR 上限。**
+
+实际开发中遵循 [plan.md](./plan.md) §6.6 的"能拆就拆"原则——表格里大多数行**还可以再拆成 2~4 个更小的 PR**。下面给几个例子：
+
+| 表格里的一行 | 实际可以拆成的小 PR |
+|---|---|
+| R1.1 `chore(rewrite): scaffold voice-rewrite crate` | (a) `chore(rewrite): create empty crate + workspace registry` <br> (b) `chore(rewrite): add cargo dependencies` <br> (c) `feat(rewrite): define error types` |
+| R1.6 `feat(rewrite): openai-compat http client` | (a) `feat(rewrite): define LlmClient trait + ChatRequest/Response types` <br> (b) `feat(rewrite): implement reqwest-based OpenAiCompatClient (no retry)` <br> (c) `feat(rewrite): add timeout handling to OpenAiCompatClient` <br> (d) `feat(rewrite): add 1-shot retry on 5xx` |
+| R1.8 `feat(rewrite): llm pipeline with clean profile` | (a) `feat(rewrite): add clean profile system prompt constant` <br> (b) `feat(rewrite): implement LlmPipeline::process happy path` <br> (c) `feat(rewrite): add fallback-to-original on llm error` <br> (d) `test(rewrite): integration tests with MockLlmClient (10 cases)` |
+| R2.12 `feat(desktop): rewrite settings panel` | (a) `feat(desktop): provider dropdown + persistence` <br> (b) `feat(desktop): model textbox + persistence` <br> (c) `feat(desktop): profile dropdown + persistence` <br> (d) `feat(desktop): api key textboxes (one per provider)` |
+
+**取舍原则**：
+- 一个 PR 一个动词，能用 "add X" / "implement Y" / "wire Z" 一句话讲清就行
+- diff ≤ 300 行（不含 lock 文件和生成代码），超出的优先拆
+- 拆出来的 PR 仍然要"主分支可运行"——空 trait 加个 `unimplemented!()` 也算可运行，下一 PR 再补实现
+- 测试和实现可以同 PR，也可以拆开（实现 PR 留 `TODO: tests in follow-up`，紧接着一个 test PR）。前者适合简单单测，后者适合 multi-case 测试集
+- **PR 编号是给计划用的，git 里的实际 commit / PR 不必严格 R1.6.a/b/c 这样编**——动词清楚 + 单一职责就够了
+
+下面表格里如果某一行的"单一职责"列写了 "X + Y" 或多动词，那基本就是"还可以再拆"的信号。
+
+### 9.1 Day 1：跑通最小链路（rewrite=clean，DeepSeek）
 
 | PR | 标题 | 单一职责 |
 |---|---|---|
-| R1.1 | `chore(rewrite): scaffold voice-rewrite crate` | 空 crate + workspace 注册 + 错误类型；显式禁止依赖音频/ASR crate |
-| R1.2 | `feat(rewrite): add RewritePipeline trait + types` | `RewritePipeline` / `RewriteContext` / `RewriteResult` / `RewriteTrace` |
-| R1.3 | `feat(rewrite): identity pipeline + mock llm` | 直通实现 + `MockLlmClient`（测试用），并写头一批单测 |
-| R1.4 | `feat(rewrite): add filler removal preprocess` | 正则去口头禅 + 单测（覆盖嗯/啊/那个/就是说/然后那个） |
-| R1.5 | `feat(rewrite): add user dictionary substitution` | 词典替换 + 单测（覆盖优先级、最长匹配） |
-| R1.6 | `feat(rewrite): openai-compat http client` | `OpenAiCompatClient`：base_url / api_key / headers 参数化 + retry + timeout |
-| R1.7 | `feat(rewrite): anthropic provider impl` | 在 R1.6 基础上加 Anthropic headers，默认 model `claude-opus-4-7` |
-| R1.8 | `feat(rewrite): llm pipeline with clean profile` | clean system prompt + 超时兜底 + 集成测试（mock LLM） |
+| 功能单位 | 标题 | 单一职责 |
+|---|---|---|
+| R1.1 | `chore(rewrite): scaffold voice-rewrite crate` | 空 crate + workspace 注册 + 错误类型；**显式禁止**依赖 `voice-asr-*` / `cpal` / `sherpa-onnx` |
+| R1.2 | `feat(rewrite): add RewritePipeline trait + types` | `RewritePipeline` / `RewriteContext` / `RewriteResult` / `RewriteTrace`（trait + 数据结构定义，无实现） |
+| R1.3 | `feat(rewrite): identity pipeline + mock llm` | 直通实现 + `MockLlmClient`（test-only），覆盖 P7 / I1 / I4 几个最简单测试用例 |
+| R1.4 | `feat(rewrite): add filler removal preprocess` | 正则去口头禅 + 单测（F1~F10） |
+| R1.5 | `feat(rewrite): add user dictionary substitution` | 词典替换 + 单测（D1~D6） |
+| R1.6 | `feat(rewrite): openai-compat http client` | `OpenAiCompatClient`：base_url / api_key / headers 参数化 + timeout + 1-shot retry（**建议拆成 4 个小 PR，见 §9.0**） |
+| R1.7 | `feat(rewrite): deepseek provider impl` | DeepSeek base_url + 默认 model `deepseek-chat` + `dotenvy` 加载 + 从 env 读 `DEEPSEEK_API_KEY` |
+| R1.8 | `feat(rewrite): llm pipeline with clean profile` | clean system prompt + 超时兜底 + 集成测试（mock LLM，覆盖 P1~P3、P9） |
 | R1.9 | `feat(core): add Rewriting realtime state` | 状态枚举 + 事件 |
-| R1.10 | `feat(core): wire rewrite into push-to-talk` | ASR 后插入 pipeline，默认 off；改写为 None 时零开销 |
-| R1.11 | `feat(cli): transcribe --rewrite=clean flag` | CLI 验证；从 env `ANTHROPIC_API_KEY` 读 key |
+| R1.10 | `feat(core): wire rewrite into push-to-talk` | ASR 后插入 pipeline，默认 off；改写为 None 时零开销，覆盖 I2 / I3 / I5 |
+| R1.11 | `feat(cli): rewrite subcommand (text→text)` | `voice-cli rewrite --profile=clean < input.txt`，纯文字到文字，调试改写最快 |
+| R1.12 | `feat(cli): transcribe --rewrite=clean flag` | `voice-cli transcribe x.wav --rewrite=clean`，audio→ASR→改写一条龙 |
 
 **Day 1 验收**：
-- `ANTHROPIC_API_KEY=... voice-cli transcribe x.wav --rewrite=clean` 输出去口头禅 + 补标点的版本
-- Linux 上 mock LLM 单测全过（**不需要联网**）
-- 桌面端**不接 UI**，但状态机已经能切到 Rewriting（hidden in 设置）
+- `voice-cli rewrite --profile=clean < input.txt` 接收 stdin，输出 DeepSeek 改写结果（§3 实测已通）
+- `voice-cli transcribe x.wav --rewrite=clean` 跑通 audio→text→rewrite 全链路
+- Linux 上 mock LLM 单测全过（**不需要联网，不需要真 key**）
+- 桌面端**不接 UI**，但状态机已经能切到 Rewriting
 
-### Day 2：做差异化（多 Profile + 命令 + 多 Provider + 桌面 UI）
+### 9.2 Day 2：做差异化（多 Profile + 命令 + 多 Provider + 桌面 UI）
 
-| PR | 标题 | 单一职责 |
+| 功能单位 | 标题 | 单一职责 |
 |---|---|---|
-| R2.1 | `feat(rewrite): add email/wechat/prompt/commit/bullets profiles` | 五个 system prompt + Profile 路由 |
-| R2.2 | `feat(rewrite): add polish profile` | 中度润色 prompt |
-| R2.3 | `feat(rewrite): voice command detection in preprocess` | 7 个命令正则 + 命令移除 + 单测 |
-| R2.4 | `feat(rewrite): multi-version profile with json output` | `response_format=json_object` + 4 字段 schema 解析 |
-| R2.5 | `feat(rewrite): openai provider impl` | 复用 R1.6 client，加 OpenAI headers，默认 model `gpt-5.5` |
-| R2.6 | `feat(rewrite): dashscope provider impl` | 复用 R1.6 client，base_url 切 `compatible-mode/v1`，默认 `qwen-max` |
-| R2.7 | `feat(core): config schema for rewrite section` | `app.toml [rewrite]` 读写 + 单测 |
-| R2.8 | `feat(desktop): rewrite settings panel` | 开关 + Provider 下拉 + Model 输入 + Profile 下拉 + 各 provider 的 API key 输入 |
-| R2.9 | `feat(desktop): secure api key with keyring` | Windows Credential Manager 存储；每个 provider 一个 entry |
-| R2.10 | `feat(desktop): show current profile in floating window` | 悬浮窗显示当前档 |
-| R2.11 | `feat(desktop): render Rewriting state` | "改写中..." UI |
-| R2.12 | `feat(desktop): multi-version variant tabs` | multi 档启用时，悬浮窗显示 4 个标签可切换复制 |
+| R2.1 | `feat(rewrite): add polish profile` | 中度润色 prompt + 测试 |
+| R2.2 | `feat(rewrite): add email profile` | 邮件 prompt + 测试 |
+| R2.3 | `feat(rewrite): add wechat profile` | 微信 prompt + 测试 |
+| R2.4 | `feat(rewrite): add commit profile` | Conventional Commit prompt + 测试 |
+| R2.5 | `feat(rewrite): add bullets profile` | 要点 prompt + 测试 |
+| R2.6 | `feat(rewrite): add prompt profile` | AI prompt 格式 + 测试 |
+| R2.7 | `feat(rewrite): voice command detection in preprocess` | 7 个命令正则 + 命令移除 + 单测 C1~C8（**建议拆成"加 regex"+"加 command→profile 映射"+"加测试"三个 PR**） |
+| R2.8 | `feat(rewrite): multi-version profile with json output` | `response_format=json_object` + 4 字段 schema 解析（覆盖 P4~P6） |
+| R2.9 | `feat(rewrite): dashscope provider impl` | 复用 R1.6 client，base_url 切 `compatible-mode/v1`，默认 model `qwen-plus` |
+| R2.10 | `feat(rewrite): openai provider impl` | 复用 R1.6 client，OpenAI 官方 base_url + 默认 model（待定，Day 2 时按当前发布版填） |
+| R2.11 | `feat(core): config schema for rewrite section` | `app.toml [rewrite]` 读写 + 单测 |
+| R2.12 | `feat(desktop): rewrite settings panel` | 开关 + Provider 下拉 + Model 输入 + Profile 下拉 + 各 provider 的 API key 输入（**建议拆成 4 个 PR，见 §9.0**） |
+| R2.13 | `feat(desktop): secure api key with keyring` | Windows Credential Manager 存储，每个 provider 一个 entry |
+| R2.14 | `feat(desktop): show current profile in floating window` | 悬浮窗显示当前档 |
+| R2.15 | `feat(desktop): render Rewriting state` | "改写中..." UI |
+| R2.16 | `feat(desktop): multi-version variant tabs` | multi 档启用时，悬浮窗显示 4 个标签可切换复制 |
 
 **Day 2 验收**：
 - Windows 上：选 email 档说话 → 松开 → 粘贴出邮件正文
 - 说"改正式一点，下午晚到十分钟" → 自动切到 polish 档输出正式句
 - 选 multi 档 → 悬浮窗 4 个标签都填好，点击任一可复制对应版本
-- 设置面板切换 Anthropic / OpenAI / DashScope 三个 provider，至少 Anthropic + DashScope 各成功跑一次（网络条件允许的话顺带跑 OpenAI）
+- 设置面板切换 DeepSeek / DashScope 至少各成功跑一次（OpenAI 可选）
 
-### Day 3：包装、demo、收尾
+### 9.3 Day 3：包装、demo、收尾
 
-| PR | 标题 | 单一职责 |
+| 功能单位 | 标题 | 单一职责 |
 |---|---|---|
-| R3.1 | `feat(rewrite): post-process length sanity check` | 异常压缩兜底原文 |
-| R3.2 | `feat(rewrite): preserve numbers and proper nouns guard` | 数字 / 英文专有名词丢失检测 |
+| R3.1 | `feat(rewrite): post-process length sanity check` | 异常压缩兜底原文（覆盖 L1~L4） |
+| R3.2 | `feat(rewrite): preserve numbers and proper nouns guard` | 数字 / 英文专有名词丢失检测（覆盖 N1~N4） |
 | R3.3 | `feat(desktop): latency breakdown display` | UI 显示 ASR / 改写 / 粘贴各段耗时（读 `RewriteTrace`） |
 | R3.4 | `feat(desktop): rewrite pipeline trace overlay` | 悬浮窗显示"预处理→命令→改写"流程链 |
 | R3.5 | `feat(core): hot reload rewrite settings` | 设置改完不用重启就生效（复用现有 restart_requested） |
@@ -538,41 +827,52 @@ ASR 原始文本
 | R3.9 | `chore: fixtures for ai rewrite demo` | 一段固定 WAV + 期望输出，让评委可复现 |
 
 **Day 3 验收**：
-- Demo 脚本走通（§10）
+- Demo 脚本走通（§11）
 - 改设置不重启桌面即生效
 - README 和 demo 文档完整
 
-### 节奏与删减
+### 9.4 节奏与删减
 
-如果 Day 1 跑不完到 R1.11，**优先保证 R1.6~R1.10 落地**（拿到 clean 档基础链路 + 串到 push_to_talk），R1.3~R1.5 可以放到 Day 2 头一两个 PR。
+如果 Day 1 跑不完到 R1.12，**优先保证 R1.6~R1.10 落地**（拿到 clean 档基础链路 + 串到 push_to_talk），R1.3~R1.5 可以放到 Day 2 头一两个 PR，R1.11 / R1.12 谁也行都能砍。
 
 ---
 
-## 9. 配置 / 密钥 / 隐私
+## 10. 配置 / 密钥 / 隐私
 
-### 9.1 API key 存储
+### 10.1 API key 存储分层
 
-- **不**写 TOML 明文
-- Windows：`keyring` crate（Rust 生态标准），底层 Windows Credential Manager
-- TOML 里只存 `api_key_ref = "system-keyring"`
-- keyring 里**每个 provider 单独一个 entry**：`voice-flow:anthropic` / `voice-flow:openai` / `voice-flow:dashscope`
-- 设置面板：选中 provider 后显示对应 key 输入框；保存后立即写 keyring，输入框显示 `********`
-- 删除 = "清除"按钮 → keyring delete 对应 entry
+| 来源 | 何时用 | 何时写 |
+|---|---|---|
+| 系统 keyring（Day 2 引入） | 桌面端运行时优先读 | 设置面板保存时 |
+| 进程环境变量 | CLI / 测试 / keyring 缺失时兜底 | 用户手动 `export` 或 `source .env` |
+| `.env` 文件（开发期） | CLI 启动时 `dotenvy::dotenv()` 加载到 env | 用户编辑 `.env` |
 
-### 9.2 数据出境提示
+读取优先级：**keyring > env > .env**。任何场景下都**不写 TOML 明文**。
+
+keyring 里**每个 provider 单独一个 entry**：
+- `voice-flow:deepseek`（默认）
+- `voice-flow:dashscope`
+- `voice-flow:openai`
+- `voice-flow:anthropic`
+
+对应 env 变量名：`DEEPSEEK_API_KEY` / `DASHSCOPE_API_KEY` / `OPENAI_API_KEY` / `ANTHROPIC_API_KEY`（与 [.env.example](./.env.example) 一致）。
+
+设置面板：选中 provider 后显示对应 key 输入框；保存后立即写 keyring，输入框显示 `********`。删除 = "清除"按钮 → keyring delete 对应 entry。
+
+### 10.2 数据出境提示
 
 - **改写默认关**。开启时设置面板必须有一行说明（按当前 provider 动态替换）：
-  > 开启 AI 改写后，识别文本会发送到 {Anthropic | OpenAI | DashScope} 服务器进行处理。不要在涉密场景下开启。
+  > 开启 AI 改写后，识别文本会发送到 {DeepSeek | DashScope | OpenAI | Anthropic} 服务器进行处理。不要在涉密场景下开启。
 - 关闭后，链路完全不联网（除非 ASR engine 选了 cloud）
 
-### 9.3 日志
+### 10.3 日志
 
-- LLM 调用入参 / 出参**不**写日志默认（仅 trace 级开关）
-- 错误日志只记录错误类型 + 状态码，不记录 prompt / 转写文本
+- LLM 调用入参 / 出参**不**写日志（仅 trace 级开关打开时写）
+- 错误日志只记录错误类型 + 状态码 + token 用量，不记录 prompt / 转写文本
 
 ---
 
-## 10. Demo 脚本
+## 11. Demo 脚本
 
 固定 WAV 文件 `docs/fixtures/demo-rewrite.wav`，内容：
 
@@ -585,7 +885,7 @@ ASR 原始文本
 3. **email 档**：粘贴正式邮件
 4. **multi 档**：悬浮窗显示 4 个版本，逐个点击展示
 5. **语音命令**：用户口语里"语气正式一点"被识别，自动切到 polish
-6. **Provider 切换（可选）**：同一句话用 Anthropic Opus vs DashScope Qwen-max 对比
+6. **Provider 切换（可选）**：同一句话用 DeepSeek vs DashScope Qwen 对比延迟和风格
 
 ### 关键展示话术
 
@@ -599,25 +899,25 @@ ASR 原始文本
 
 ---
 
-## 11. 删减线（进度落后按序砍）
+## 12. 删减线（进度落后按序砍）
 
 | 序号 | 砍掉 | 影响 |
 |---|---|---|
 | 1 | R3.6 custom profile 编辑器 | 编辑 TOML 即可 |
 | 2 | R3.4 trace overlay / R3.3 延迟显示 | demo 解说时口播 |
 | 3 | R3.2 数字 / 专有名词保护 | 不致命，但 demo 时小心选词 |
-| 4 | R2.12 multi-version 多标签 UI | 退化成 multi 档输出 JSON 到悬浮窗"最近文本"区，能看就行 |
-| 5 | R2.9 keyring | 退化成 TOML 明文 + 警告文字 |
-| 6 | R2.5 / R2.6 OpenAI / DashScope provider | 退化成只有 Anthropic 一家 |
-| 7 | R2.3 语音命令识别 | 退化成仅靠 Profile 下拉 |
-| 8 | R2.4 multi 档 | 退化成只有 clean / polish / email 三档 |
-| 9 | **底线**：Day 1（R1.1~R1.11）必须完成 | clean 档单条链路跑通 = 创新点已立住，剩下都是加分 |
+| 4 | R2.16 multi-version 多标签 UI | 退化成 multi 档输出 JSON 到悬浮窗"最近文本"区，能看就行 |
+| 5 | R2.13 keyring | 退化成只用 env / `.env`（已 gitignore，开发够用） |
+| 6 | R2.9 / R2.10 DashScope / OpenAI provider | 退化成只有 DeepSeek 一家 |
+| 7 | R2.7 语音命令识别 | 退化成仅靠 Profile 下拉 |
+| 8 | R2.8 multi 档 | 退化成只有 clean / polish / email 三档 |
+| 9 | **底线**：Day 1（R1.1~R1.12）必须完成 | clean 档单条链路跑通 = 创新点已立住，剩下都是加分 |
 
 ---
 
-## 12. 测试策略与测试样例
+## 13. 测试策略与测试样例
 
-### 12.1 分层
+### 13.1 分层
 
 | 层 | 跑在哪 | 覆盖 | 工具 |
 |---|---|---|---|
@@ -630,7 +930,7 @@ ASR 原始文本
 
 L1~L4 **必须**在 CI 跑（一旦加 CI）。L5 默认 ignore，避免 CI 调用真实 API 烧钱。L6 是 demo 验收。
 
-### 12.2 Mock LLM 设计
+### 13.2 Mock LLM 设计
 
 ```rust
 // crates/voice-rewrite/src/llm/mock.rs（test-only，feature = "test-util"）
@@ -653,7 +953,7 @@ pub enum MockBehavior {
 
 测试通过 `MockLlmClient::with_response(profile, input, output)` 注入预期，断言 pipeline 行为。
 
-### 12.3 具体测试样例（按 PR 对应）
+### 13.3 具体测试样例（按 PR 对应）
 
 > 每个样例都是"输入 → 期望"。LLM 部分用 mock，不需要真 key。
 
@@ -750,13 +1050,13 @@ pub enum MockBehavior {
 | S3 | clean，timeout=1ms | 同上 | fallback=true |
 | S4 | clean，key 错误 | 任意 | LlmError::Auth，fallback=true |
 
-### 12.4 测试 fixtures
+### 13.4 测试 fixtures
 
 - `crates/voice-rewrite/tests/fixtures/preprocess/`：每个样例一个 `.in.txt` + `.expected.txt`
 - `crates/voice-rewrite/tests/fixtures/multi_json/`：几个 LLM 返回的 JSON 样本（正确 / 缺字段 / 非法）
 - `docs/fixtures/demo-rewrite.wav`：demo 用的固定音频（Day 3 引入）
 
-### 12.5 跑测命令一览
+### 13.5 跑测命令一览
 
 ```bash
 # Linux / Windows 都能跑
@@ -771,39 +1071,33 @@ cargo test --workspace
 
 ---
 
-## 13. 剩余决策点（启动前需用户确认）
+## 14. 决策点（已定稿）
 
-下面这些**会影响代码**，启动 Day 1 前需要确认：
+启动 Day 1 前的决策都已定，列在这里作记录：
 
-| # | 决策 | 我的建议（你可以否） |
+| # | 决策 | 结论 |
 |---|---|---|
-| 1 | **是否真把默认 provider 设为 Anthropic Opus** | 是。如果你网络访问 Anthropic 不稳定，改成 DashScope `qwen-max` 当默认，Opus 留作可切换选项 |
-| 2 | **API key 注入方式** | Day 1 通过环境变量（`ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `DASHSCOPE_API_KEY`）；Day 2 引入 keyring 持久化。Day 1 不写 keyring |
-| 3 | **OpenAI 模型名占位 `gpt-5.5`** | Day 2 实际配上时再确认当前发布版（GPT-5 / o4 / 其他）；改一行默认配置即可 |
-| 4 | **Anthropic OpenAI 兼容端点 vs 原生 `/v1/messages`** | 先试 OpenAI 兼容路径 `/v1/chat/completions`（共用 client）；如果 multi 档的 `response_format` 不被兼容，单独退到 Anthropic 原生 messages API（多写 50 行不复用 OpenAiCompatClient） |
-| 5 | **是否提供 `voice-cli rewrite` 子命令**（纯文字→文字，用于 demo / 调试） | 强烈推荐做。一行字进、一行字出，不需要音频，调试改写最快。R1.11 顺手做了 |
-| 6 | **是否要求 ASR engine ≠ off 才能开改写** | 不要求。`voice-cli rewrite` 直接输入文本就能跑 |
-| 7 | **改写失败是否提示用户** | 静默兜底原文 + trace 标 `fallback=true`，UI 角标小红点（不弹窗）。demo 时演示"断网也能用" |
-| 8 | **是否在 Day 1 接 SSE 流式** | 不接。粘贴是一次性动作，流式徒增复杂度 |
-| 9 | **是否引入 `async-openai` 等高层 SDK** | 不引入。直接 reqwest + serde，三个 provider 共用 ~200 行足够，少一层依赖 |
-| 10 | **Day 1 必须接 Anthropic Opus 吗（万一你拿不到 key）** | 如果你只能拿到 DashScope key，Day 1 把默认改成 `qwen-max`；架构不变，改一行配置 |
-
-请你回我：
-- **第 1 项**：默认 provider 选 Anthropic 还是 DashScope
-- **第 10 项**：你目前能拿到哪几家的 key
-
-其他项我已经做了合理默认，等你不同意时再讨论。
+| 1 | 默认 provider | **DeepSeek**（`deepseek-chat`）。已在 2026-05-24 用 [.env](.env) 里的真实 key 通过 curl 实测两个调用模式（§3.1） |
+| 2 | API key 注入方式 | Day 1：env / `.env` 文件 + `dotenvy` 加载。Day 2：桌面端引入 keyring 持久化，CLI / 测试仍 fallback 到 env |
+| 3 | 模型版本绑定 | 配置写 `deepseek-chat` 这个稳定别名，**不**写 `deepseek-v4-flash` 等具体版本号。后端自动路由到最新 |
+| 4 | OpenAI 兼容 client 复用 | DeepSeek / DashScope / OpenAI 三家共用一份 `OpenAiCompatClient`。Anthropic 单独写（Day 3 视进度，可砍） |
+| 5 | `voice-cli rewrite` 子命令 | 做。R1.11 顺手做了，纯文字→文字，调试和 demo 都用得上 |
+| 6 | 是否要求 ASR engine ≠ off 才能开改写 | 不要求。改写是独立文本管道，可独立测试 |
+| 7 | 改写失败处理 | 静默兜底原文 + trace 标 `fallback=true`，UI 小红点提示（不弹窗）。Demo 时演示"断网也能用" |
+| 8 | Day 1 是否接 SSE 流式 | 不接。粘贴是一次性动作，流式无收益 |
+| 9 | 是否引入 `async-openai` 高层 SDK | 不引入。直接 reqwest + serde 共用 ~80 行（§3.2 给了完整骨架） |
+| 10 | DashScope client 是否复用 `voice-asr-cloud::DashScopeClient` | 不复用。Step 8 是 WebSocket 协议，本计划是 HTTP OpenAI 兼容；client 类型完全分开，API key 可同一个账户 |
 
 ---
 
-## 14. 与现有 plan.md 的衔接
+## 15. 与现有 plan.md 的衔接
 
 完成 Day 1 时：
 - plan.md §五 Step 10 的"占位 PR 表"用本文件 Day 1 的真实 PR 列表替换
 - plan.md §十三 §13.7 待用户决定项逐项回写答案：
-  - 改写档清单 → 见 §5
+  - 改写档清单 → 见 §6
   - 是否热切档 → 录音前在设置面板切；说话中通过语音命令切；UI 切换的"重新生成"留到 Day 3 视进度
-  - LLM 提供商 → 默认 Anthropic Opus，可切 OpenAI / DashScope（与 Step 8 复用账号）
+  - LLM 提供商 → 默认 DeepSeek `deepseek-chat`，可切 DashScope / OpenAI / Anthropic
   - 端侧改写 → 不做，留 `voice-rewrite-local` crate 占位
   - 自定义 Profile UI → 设置面板多行 textarea，不做语法高亮
 
