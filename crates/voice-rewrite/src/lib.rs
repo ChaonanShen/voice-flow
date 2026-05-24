@@ -5,6 +5,7 @@
 
 pub mod error;
 pub mod llm;
+pub mod multi;
 pub mod pipeline;
 pub mod postprocess;
 pub mod preprocess;

@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::RewriteError;
 use crate::llm::{ChatRequest, LlmClient, ResponseFormat};
+use crate::multi::parse_multi_response;
 use crate::postprocess::{validate_rewrite, PostprocessDecision};
 use crate::preprocess::{Preprocessor, UserDictionary};
 use crate::profile::Profile;
@@ -203,26 +204,6 @@ fn fallback(main: String, trace: RewriteTrace) -> RewriteResult {
         variants: HashMap::new(),
         trace,
     }
-}
-
-fn parse_multi_response(content: &str) -> Result<HashMap<String, String>, String> {
-    let value: serde_json::Value = serde_json::from_str(content)
-        .map_err(|e| format!("failed to parse multi profile JSON: {e}"))?;
-    let Some(object) = value.as_object() else {
-        return Err("multi profile JSON must be an object".to_string());
-    };
-
-    let mut variants = HashMap::new();
-    for key in ["clean", "polish", "wechat", "bullets"] {
-        let value = object
-            .get(key)
-            .and_then(|v| v.as_str())
-            .unwrap_or_default()
-            .trim()
-            .to_string();
-        variants.insert(key.to_string(), value);
-    }
-    Ok(variants)
 }
 
 fn temperature_for_profile(profile: Profile) -> f32 {
