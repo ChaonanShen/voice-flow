@@ -22,7 +22,7 @@ body {
 }
 
 body {
-  background: #f6f8fb;
+  background: transparent;
 }
 
 button,
@@ -33,16 +33,16 @@ select {
 
 .shell {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
-  gap: 14px;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 8px;
   width: 100%;
   min-width: 0;
   height: 100%;
-  padding: 18px;
+  padding: 8px;
 }
 
 .mode-nav {
-  display: grid;
+  display: none;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 2px;
   min-width: 0;
@@ -81,7 +81,7 @@ select {
 }
 
 .status-row {
-  display: grid;
+  display: none;
   grid-template-columns: 16px minmax(0, 1fr) 32px 32px;
   gap: 12px;
   align-items: center;
@@ -167,52 +167,110 @@ h1 {
 
 .floating-panel {
   display: grid;
-  gap: 10px;
+  justify-items: center;
+  gap: 5px;
   min-width: 0;
   min-height: 0;
 }
 
-.floating-meta {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(92px, 0.55fr);
-  gap: 8px;
-  min-width: 0;
+.floating-drag-handle {
+  width: 34px;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(89, 101, 121, 0.35);
 }
 
-.floating-meta > div,
-.floating-output {
-  min-width: 0;
-  padding: 8px 9px;
-  border: 1px solid #d8dee8;
-  border-radius: 6px;
+.mic-row {
+  display: grid;
+  grid-template-columns: 72px 28px;
+  gap: 8px;
+  align-items: start;
+  justify-content: center;
+}
+
+.mic-button {
+  display: grid;
+  width: 72px;
+  height: 72px;
+  place-items: center;
+  border: 1px solid #cfd7e3;
+  border-radius: 50%;
   background: #ffffff;
+  box-shadow: 0 10px 24px rgba(23, 33, 43, 0.14);
+  cursor: pointer;
 }
 
-.floating-output {
+.mic-button[data-state="recording"] {
+  border-color: #f0aaa3;
+  background: #fff5f3;
+}
+
+.mic-button[data-state="transcribing"],
+.mic-button[data-state="rewriting"] {
+  border-color: #9bbcff;
+  background: #f4f8ff;
+}
+
+.mic-button[data-paused="true"] {
+  border-color: #f5c26b;
+  background: #fff7e6;
+}
+
+.mic-button[data-state="error"] {
+  border-color: #f3c3bd;
+  background: #fff7f5;
+}
+
+.mic-icon {
+  position: relative;
+  width: 22px;
+  height: 34px;
+  border: 3px solid #243344;
+  border-radius: 14px;
+}
+
+.mic-icon::before {
+  position: absolute;
+  top: 22px;
+  left: 50%;
+  width: 22px;
+  height: 14px;
+  border: 3px solid #243344;
+  border-top: 0;
+  border-radius: 0 0 14px 14px;
+  content: "";
+  transform: translateX(-50%);
+}
+
+.mic-icon::after {
+  position: absolute;
+  top: 36px;
+  left: 50%;
+  width: 3px;
+  height: 8px;
+  background: #243344;
+  content: "";
+  transform: translateX(-50%);
+}
+
+.floating-settings {
   display: grid;
-  gap: 4px;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 1px solid #d8dee8;
+  border-radius: 50%;
+  background: #ffffff;
+  color: #596579;
+  cursor: pointer;
 }
 
-#output-target {
-  display: block;
-  overflow: hidden;
-  color: #243344;
-  font-size: 12px;
-  line-height: 1.2;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.transcript-meta {
+.floating-summary {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
-  align-items: center;
-  margin-bottom: 4px;
-}
-
-.transcript-meta .label {
-  margin-bottom: 0;
+  justify-items: center;
+  gap: 3px;
+  max-width: 150px;
+  min-width: 0;
 }
 
 #rewrite-chip {
@@ -237,23 +295,26 @@ h1 {
 }
 
 #last-transcript {
-  display: -webkit-box;
+  display: block;
+  width: 100%;
   margin: 0;
   overflow: hidden;
-  color: #243344;
-  font-size: 15px;
-  line-height: 1.45;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
+  color: #596579;
+  font-size: 11px;
+  line-height: 1.25;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .result-meta {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 3px;
   align-items: center;
   min-width: 0;
-  margin-top: 8px;
+  max-width: 150px;
+  margin-top: 0;
 }
 
 .result-meta[hidden] {
@@ -278,7 +339,8 @@ h1 {
   display: grid;
   gap: 6px;
   min-width: 0;
-  margin-top: 10px;
+  max-width: 160px;
+  margin-top: 0;
 }
 
 .variant-panel[hidden] {
@@ -317,8 +379,8 @@ h1 {
 
 .variant-actions {
   display: grid;
-  grid-template-columns: 96px 96px minmax(0, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
   align-items: center;
   min-width: 0;
 }
@@ -337,6 +399,7 @@ h1 {
 }
 
 #variant-action-status {
+  grid-column: 1 / -1;
   overflow: hidden;
   color: #596579;
   font-size: 11px;
@@ -386,12 +449,42 @@ h1 {
 
 .settings {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   gap: 10px;
   min-width: 0;
   min-height: 0;
-  padding-top: 2px;
+  padding: 10px;
+  border: 1px solid #d8dee8;
+  border-radius: 8px;
+  background: #f6f8fb;
   overflow: hidden;
+}
+
+.settings-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  min-width: 0;
+}
+
+.settings-header strong {
+  overflow: hidden;
+  color: #17212b;
+  font-size: 14px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-close {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid #cfd7e3;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #243344;
+  cursor: pointer;
 }
 
 .settings[hidden] {

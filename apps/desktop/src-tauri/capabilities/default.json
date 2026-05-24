@@ -6,6 +6,8 @@
   "permissions": [
     "core:default",
     "core:window:allow-start-dragging",
+    "core:window:allow-set-focusable",
+    "core:window:allow-set-size",
     "global-shortcut:default"
   ]
 }

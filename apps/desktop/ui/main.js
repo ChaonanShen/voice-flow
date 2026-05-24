@@ -56,6 +56,9 @@ const variantTabs = document.querySelectorAll("[data-variant-tab]");
 const copyVariant = document.querySelector("#copy-variant");
 const pasteVariant = document.querySelector("#paste-variant");
 const variantActionStatus = document.querySelector("#variant-action-status");
+const micButton = document.querySelector("#mic-button");
+const floatingSettings = document.querySelector("#floating-settings");
+const settingsClose = document.querySelector("#settings-close");
 const runtimeError = document.querySelector("#runtime-error");
 const runtimeErrorText = document.querySelector("#runtime-error-text");
 const pauseToggle = document.querySelector("#pause-toggle");
@@ -93,6 +96,12 @@ const rewriteKeySummary = document.querySelector("#rewrite-key-summary");
 
 const invoke = window.__TAURI__?.core?.invoke;
 const listen = window.__TAURI__?.event?.listen;
+const appWindow = window.__TAURI__?.window?.getCurrentWindow?.();
+const LogicalSize = window.__TAURI__?.dpi?.LogicalSize;
+const windowSizes = {
+  floating: { width: 132, height: 132 },
+  settings: { width: 460, height: 360 },
+};
 let configSnapshot = normalizeConfig(configDefaults);
 let activeSettingsTab = "input";
 let activeVariant = "clean";
@@ -100,10 +109,13 @@ let rewriteVariants = {};
 let rewriteKeySaved = false;
 let paused = false;
 let activeMode = "floating";
+let currentState = "idle";
 
 function applyState(event) {
   const state = event?.state ?? "idle";
+  currentState = state;
   dot.dataset.state = state;
+  micButton.dataset.state = state;
   stateLabel.textContent = paused ? "已暂停" : labels[state] ?? labels.idle;
 
   if (state !== "error") {
@@ -131,10 +143,13 @@ function applyState(event) {
 function applyPauseState(event) {
   paused = Boolean(event?.paused);
   pauseToggle.dataset.active = String(paused);
+  micButton.dataset.paused = String(paused);
   pauseToggle.title = paused ? "恢复监听" : "暂停监听";
+  micButton.title = paused ? "监听已暂停" : "按住 Alt+Space 说话";
   pauseToggle.querySelector("span").textContent = paused ? ">" : "||";
   if (paused) {
     dot.dataset.state = "idle";
+    micButton.dataset.state = "idle";
     stateLabel.textContent = "已暂停";
   } else if (stateLabel.textContent === "已暂停") {
     stateLabel.textContent = labels.idle;
@@ -353,6 +368,7 @@ function switchSettingsTab(tab) {
 
 function switchMode(mode) {
   activeMode = mode;
+  void applyWindowMode(mode);
   modeTabs.forEach((button) => {
     const active = button.dataset.modeTab === mode;
     button.classList.toggle("is-active", active);
@@ -363,6 +379,20 @@ function switchMode(mode) {
   });
   if (mode === "settings" && activeSettingsTab === "diagnostics") {
     refreshDiagnosticsPanel();
+  }
+}
+
+async function applyWindowMode(mode) {
+  if (!appWindow || !LogicalSize) {
+    return;
+  }
+
+  const size = windowSizes[mode] ?? windowSizes.floating;
+  try {
+    await appWindow.setFocusable(mode === "settings");
+    await appWindow.setSize(new LogicalSize(size.width, size.height));
+  } catch (error) {
+    settingsMessage.textContent = String(error);
   }
 }
 
@@ -422,6 +452,7 @@ function updateVariantPanel() {
 }
 
 async function boot() {
+  void applyWindowMode(activeMode);
   applyState({ state: "idle" });
 
   if (!invoke || !listen) {
@@ -458,11 +489,16 @@ settingsToggle.addEventListener("click", () => {
   switchMode(activeMode === "settings" ? "floating" : "settings");
 });
 
+floatingSettings.addEventListener("click", () => switchMode("settings"));
+settingsClose.addEventListener("click", () => switchMode("floating"));
+
 modeTabs.forEach((button) => {
   button.addEventListener("click", () => switchMode(button.dataset.modeTab));
 });
 
-pauseToggle.addEventListener("click", async () => {
+pauseToggle.addEventListener("click", togglePauseState);
+
+async function togglePauseState() {
   const next = !paused;
   applyPauseState({ paused: next });
   if (!invoke) {
@@ -476,7 +512,7 @@ pauseToggle.addEventListener("click", async () => {
     applyPauseState({ paused: !next });
     settingsMessage.textContent = String(error);
   }
-});
+}
 
 settingsTabs.forEach((button) => {
   button.addEventListener("click", () => switchSettingsTab(button.dataset.settingsTab));
