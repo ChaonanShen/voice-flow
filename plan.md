@@ -15,7 +15,7 @@
 
 - **Linux 只作为开发与核心逻辑验证环境**：当前机器用于写 Rust core / ASR / CLI、跑纯逻辑测试、跑文件回放与模型转写验证；不在 Linux 上安装或调试桌面外壳依赖，也不把 Linux 桌面可用性作为近期目标。
 - **Windows 是桌面产品验收目标**：全局快捷键、麦克风、剪贴板、模拟粘贴、Tauri 悬浮窗和设置面板都以 Windows 原生环境为准；Step 5 之后尽快切到 Windows 上实测和继续开发。
-- **GUI 实现顺序 = Tauri 内 Web UI 优先**：不单独做一个浏览器 Web app。先在 `apps/desktop/ui` 里按普通 Web 前端方式实现设置面板、状态视图和 mock 数据；再接 Tauri command/event；最后处理 Windows 实机快捷键、悬浮窗、keyring、粘贴等平台细节。
+- **GUI 实现顺序 = Tauri 内 Web UI 优先**：不单独做一个浏览器 Web app。GUI / Windows 桌面体验的后续提升独立记录在 [`desktop_gui_plan.md`](./desktop_gui_plan.md)。
 - **架构保留多端余地**：核心仍保持平台无关，把录音源、ASR 引擎、状态事件、文本输出、配置存储抽象清楚。Windows 桌面、未来手机端或 Web 插件都只做 adapter，不复制核心链路。
 - **移动端 / Web 插件后置探索**：如果后续要做手机端或浏览器插件，优先复用同一套"录音 → ASR → 文本处理 → 插入目标"核心模型；当前不为它们提前引入运行时或依赖。
 
@@ -269,7 +269,7 @@ voice-flow/
 
 ### Step 9：引擎相关设置
 
-**目标**：把 Step 8 的引擎选择和云端 API key 接入桌面设置面板。GUI 先按 Tauri 内 Web UI 做：前端用 mock/config snapshot 跑通控件和状态，再接 Tauri command/event，最后做 Windows keyring 与实机验证。
+**目标**：把 Step 8 的引擎选择和云端 API key 接入桌面设置面板。GUI 的详细提升路线见 [`desktop_gui_plan.md`](./desktop_gui_plan.md)。
 
 | PR | 标题 | 单一职责 |
 |---|---|---|
@@ -304,7 +304,7 @@ voice-flow/
 - **非 GUI rewrite 引擎已完成主链路**：`voice-rewrite` crate、预处理、用户词典、语音命令识别、多 profile、multi JSON 输出、postprocess 兜底、DeepSeek / DashScope / OpenAI provider 都已落地。
 - **core / CLI 接线已完成**：`app.toml [rewrite]` schema、`voice-core::text_pipeline`、`voice-cli rewrite`、`voice-cli transcribe --rewrite`、`voice-cli push-to-talk-transcribe --rewrite` 均可用；不开 rewrite 时默认链路仍等价于 ASR 原文。
 - **文档与 demo 已完成非 GUI 部分**：README 增加 AI 改写使用指南，`docs/demo-rewrite.md` 增加演示步骤，`docs/fixtures/demo-rewrite.wav` 提供固定 16 kHz mono WAV fixture。
-- **GUI 后置执行策略**：先在 Tauri 前端按 Web UI/mock 数据做 rewrite 设置面板、profile 状态和 multi tabs；再接 Tauri command/event；最后做 Windows keyring、悬浮窗焦点和实机验收。不另起独立 browser app。
+- **GUI 后续提升已拆出**：rewrite 设置面板、profile 状态、multi tabs、Windows keyring、托盘、打包和实机验收等桌面体验事项见 [`desktop_gui_plan.md`](./desktop_gui_plan.md)。
 
 **当前验收命令**：
 
@@ -550,9 +550,7 @@ system_prompt = "..."
 
 ### 13.6 桌面 UI 增量
 
-- 悬浮窗加一个"改写档"小标签，显示当前 Profile
-- 设置面板加：开关、默认 Profile 下拉、API key 录入、自定义 prompt 编辑器
-- 状态机加 `Rewriting`，前端显示成"改写中..."
+桌面 UI 增量已拆到 [`desktop_gui_plan.md`](./desktop_gui_plan.md)。本计划只保留基础语音转文本主线和 AI 改写入口，不再展开 GUI roadmap。
 
 ### 13.7 待用户决定的设计点
 

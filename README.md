@@ -2,7 +2,7 @@
 
 按住快捷键说话，松开自动粘贴文本到光标位置。**端侧 ASR 默认开启**，离线可用、隐私不离开设备；云端引擎作为可选增强。
 
-> 状态：开发中。本 README 为骨架，随各 Step 逐步完善。详细路线见 [`plan.md`](./plan.md)。
+> 状态：开发中。本 README 为骨架，随各 Step 逐步完善。基础语音转文本路线见 [`plan.md`](./plan.md)，AI 改写路线见 [`ai_rewrite_plan.md`](./ai_rewrite_plan.md)，Windows GUI 提升路线见 [`desktop_gui_plan.md`](./desktop_gui_plan.md)。
 
 ## 一、产品定位
 

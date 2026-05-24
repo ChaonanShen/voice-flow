@@ -2,7 +2,7 @@
 
 > 配套：[plan.md](./plan.md) §十三 是这部分功能的占位草稿，本文件是落地版。完成后回写 plan.md 的 §13.7 待决项即可，**不要把这里的内容塞回 plan.md**。
 >
-> 参考：[wispr_flow_analysis.md](./wispr_flow_analysis.md)（产品分析）、[hackathon_ai_voice_input_plan.md](./hackathon_ai_voice_input_plan.md)（功能映射）。
+> 参考：[wispr_flow_analysis.md](./wispr_flow_analysis.md)（产品分析）、[hackathon_ai_voice_input_plan.md](./hackathon_ai_voice_input_plan.md)（功能映射）、[desktop_gui_plan.md](./desktop_gui_plan.md)（Windows/Tauri GUI 提升计划）。
 
 ---
 
@@ -835,17 +835,11 @@ ASR 原始文本
 
 下面表格里如果某一行的"单一职责"列写了 "X + Y" 或多动词，那基本就是"还可以再拆"的信号。
 
-### 9.0.1 GUI 执行顺序（Tauri 内 Web UI 优先）
+### 9.0.1 GUI 边界
 
-GUI 不另起独立 browser app。当前桌面端已经是 Tauri，前端就是 Web 技术栈；真正需要后置验证的是 Tauri bridge 和 Windows 平台能力。因此 GUI 按三段推进：
+GUI 不另起独立 browser app。当前桌面端已经是 Tauri，前端就是 Web 技术栈。
 
-| 阶段 | 做什么 | 验证方式 |
-|---|---|---|
-| G1 Web 化 UI | 在 `apps/desktop/ui` 里用 mock/config snapshot 实现设置面板、profile 控件、状态视图、multi tabs | 浏览器/Tauri WebView 截图、静态交互检查；不需要 keyring、麦克风、真实 LLM |
-| G2 Tauri bridge | 用 Tauri command/event 把 mock 数据换成 `app.toml`、runtime state、rewrite trace | Rust 单测 + Tauri command smoke；仍尽量少依赖 Windows 实机 |
-| G3 Windows 实机 | keyring、全局快捷键、悬浮窗置顶/焦点、剪贴板/粘贴、真实录音和真实 LLM | Windows 手测 checklist 和 demo |
-
-这样保留 Web UI 的开发速度，但不产生一个之后要丢弃的独立浏览器版本。
+本文件只记录 AI 改写引擎、profile、provider、fallback 和文本域测试。GUI / Windows 桌面体验的详细路线，包括 Tauri Web UI、keyring、托盘、trace 面板、打包和实机验收，统一记录在 [`desktop_gui_plan.md`](./desktop_gui_plan.md)。
 
 ### 9.1 Day 1：跑通最小链路（rewrite=clean，DeepSeek）
 
@@ -911,8 +905,8 @@ GUI 不另起独立 browser app。当前桌面端已经是 Tauri，前端就是 
 - R2.11 已完成：`app.toml [rewrite]` schema、默认关闭策略、用户词典、provider/model/profile/timeout 读写，以及 `voice-core::text_pipeline` 非 GUI glue。
 - R2.12~R2.13 已完成：Tauri 内 Web UI 已支持 rewrite 开关、profile/provider/model/timeout 设置，并通过 command 读写 `app.toml [rewrite]`。
 - R2.15~R2.17 已完成到 G2：悬浮窗显示当前 rewrite profile，`RealtimeState::Rewriting` 已由 desktop runtime 真实发出，multi variants 已从 mock 改为监听 `rewrite-result` 事件。
-- R2.14 仍后置：API key 目前仍走环境变量 / `.env`，Windows Credential Manager keyring 存储放到 G3。
-- Day 2 剩余验证：Windows 实机用真实录音 + 真实 LLM 跑 email / voice command / multi 三条验收路径。
+- R2.14 仍后置：API key 目前仍走环境变量 / `.env`，Windows Credential Manager keyring 存储放到 [`desktop_gui_plan.md`](./desktop_gui_plan.md) G2。
+- Day 2 剩余验证：Windows 实机用真实录音 + 真实 LLM 跑 email / voice command / multi 三条验收路径，具体 checklist 见 [`desktop_gui_plan.md`](./desktop_gui_plan.md) G5。
 
 ### 9.3 Day 3：包装、demo、收尾
 
@@ -937,7 +931,7 @@ GUI 不另起独立 browser app。当前桌面端已经是 Tauri，前端就是 
 
 - R3.1~R3.2 已完成：过短输出、数字丢失、英文专有名词丢失都会触发原文兜底。
 - R3.7~R3.8 已完成到非 GUI 文档层：README 增加 AI 改写使用指南，`docs/demo-rewrite.md` 提供纯文本、真实 LLM smoke 和 WAV-to-rewrite 命令。
-- R3.3~R3.6 仍后置：它们依赖 GUI / 设置热更新，执行时按 G1 Web 化 UI → G2 Tauri bridge → G3 Windows 实机推进。
+- R3.3~R3.6 仍后置：它们依赖 GUI / 设置热更新，具体执行顺序见 [`desktop_gui_plan.md`](./desktop_gui_plan.md)。
 - R3.9 单独处理：只在能生成并验证可识别的固定 WAV 时提交 fixture，避免把无效音频放进 demo。
 
 ### 9.4 节奏与删减

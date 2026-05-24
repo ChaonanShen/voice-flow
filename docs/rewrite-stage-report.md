@@ -255,8 +255,10 @@ $env:DEEPSEEK_API_KEY="你的key"
 
 ## 下一步建议
 
+GUI / Windows 桌面体验的后续提升已独立整理到 [`desktop_gui_plan.md`](../desktop_gui_plan.md)。近期建议按该文档的 G2 -> G3 -> G4 顺序推进：
+
 1. 做 Windows Credential Manager keyring 接入，解决 GUI API key 输入框只是 shell 的问题。
-2. 补 desktop 实机验收清单，并记录一次真实运行结果。
-3. 完成 multi variants 的用户操作闭环：点击候选后复制或替换当前结果。
-4. 加 rewrite trace / latency UI，展示 ASR、rewrite、fallback 原因和耗时。
-5. 做设置热更新，减少保存设置后的 runtime restart。
+2. 完成 multi variants 的用户操作闭环：点击候选后复制或替换当前结果。
+3. 加 rewrite trace / latency UI，展示 ASR、rewrite、fallback 原因和耗时。
+4. 补 desktop 实机验收清单，并记录一次真实运行结果。
+5. 做托盘、暂停、日志诊断和 Tauri 打包。
