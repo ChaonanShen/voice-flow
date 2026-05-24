@@ -100,10 +100,11 @@ where
         let preprocess_started = Instant::now();
         let preprocessor = Preprocessor::new((*ctx.user_dictionary).clone());
         let preprocessed = preprocessor.run(text);
-        let mut trace = RewriteTrace::new(ctx.default_profile)
+        let selected_profile = preprocessed.command_profile.unwrap_or(ctx.default_profile);
+        let mut trace = RewriteTrace::new(selected_profile)
             .with_preprocess_duration(preprocess_started.elapsed());
 
-        if !ctx.default_profile.should_call_llm() || preprocessed.cleaned_text.chars().count() < 5 {
+        if !selected_profile.should_call_llm() || preprocessed.cleaned_text.chars().count() < 5 {
             return Ok(RewriteResult {
                 main: preprocessed.cleaned_text,
                 variants: std::collections::HashMap::new(),
@@ -111,7 +112,7 @@ where
             });
         }
 
-        let Some(system) = system_prompt(ctx.default_profile) else {
+        let Some(system) = system_prompt(selected_profile) else {
             return Ok(RewriteResult {
                 main: preprocessed.cleaned_text,
                 variants: std::collections::HashMap::new(),
@@ -264,6 +265,29 @@ mod tests {
                 calls[0].system
             );
         }
+    }
+
+    #[tokio::test]
+    async fn voice_command_overrides_default_profile() {
+        let mock = MockLlmClient::ok("老师您好：\n\n今天下午我会晚到十分钟，请您不必等我。");
+        let pipeline = LlmRewritePipeline::new(mock.clone());
+        let result = pipeline
+            .process(
+                "写成邮件，下午晚到十分钟，让老师不要等我",
+                context(Profile::Clean),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(
+            result.main,
+            "老师您好：\n\n今天下午我会晚到十分钟，请您不必等我。"
+        );
+        assert_eq!(result.trace.profile, Profile::Email);
+        let calls = mock.calls();
+        assert_eq!(calls.len(), 1);
+        assert!(calls[0].system.contains("邮件"));
+        assert_eq!(calls[0].user, "下午晚到十分钟，让老师不要等我");
     }
 
     #[tokio::test]

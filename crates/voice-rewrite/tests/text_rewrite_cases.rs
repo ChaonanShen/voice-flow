@@ -34,12 +34,12 @@ impl LlmClient for ExampleLlm {
 
 #[tokio::test]
 async fn demo_teacher_late_message_across_profiles() {
-    let input = "嗯，我要写个邮件，就是跟老师说一下，今天下午可能因为地铁晚点要晚到十分钟左右，让他不要等我，那个语气正式一点。";
+    let input = "嗯，跟老师说一下，今天下午可能因为地铁晚点要晚到十分钟左右，让他不要等我。";
 
     assert_rewrite(
         Profile::Clean,
         input,
-        "我要写个邮件，跟老师说一下，今天下午可能因为地铁晚点要晚到十分钟左右，让他不要等我，语气正式一点",
+        "跟老师说一下，今天下午可能因为地铁晚点要晚到十分钟左右，让他不要等我",
     )
     .await;
     assert_rewrite(
