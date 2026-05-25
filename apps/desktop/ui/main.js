@@ -80,6 +80,7 @@ const runtimeError = document.querySelector("#document-runtime-error");
 const runtimeErrorText = document.querySelector("#document-runtime-error-text");
 const pauseToggle = document.querySelector("#document-pause-toggle");
 const settingsToggle = document.querySelector("#document-settings-toggle");
+const documentCloseApp = document.querySelector("#document-close-app");
 const settingsPanel = document.querySelector("#settings-panel");
 const settingsMessage = document.querySelector("#settings-message");
 const modeTabs = document.querySelectorAll("[data-mode-tab]");
@@ -670,21 +671,25 @@ function contextMenuItemsForActiveMode() {
   if (store.mode !== "floating") {
     items.push({
       label: "切换到悬浮窗模式",
-      mode: "floating",
+      action: () => setMode("floating"),
     });
   }
   if (hasVoicePad && store.mode !== "voice-pad") {
     items.push({
       label: "切换到文稿模式",
-      mode: "voice-pad",
+      action: () => setMode("voice-pad"),
     });
   }
   if (store.mode !== "settings") {
     items.push({
       label: "打开设置",
-      mode: "settings",
+      action: () => setMode("settings"),
     });
   }
+  items.push({
+    label: "关闭",
+    action: closeApp,
+  });
 
   return items;
 }
@@ -710,7 +715,7 @@ async function showModeContextMenu(event) {
   }
 
   if (!NativeMenu || !NativeMenuItem) {
-    setMode(items[0].mode);
+    items[0].action();
     return;
   }
 
@@ -718,12 +723,24 @@ async function showModeContextMenu(event) {
     items.map((item) =>
       NativeMenuItem.new({
         text: item.label,
-        action: () => setMode(item.mode),
+        action: item.action,
       }),
     ),
   );
   activeContextMenu = await NativeMenu.new({ items: menuItems });
   await activeContextMenu.popup(undefined, appWindow);
+}
+
+async function closeApp() {
+  if (!invoke) {
+    return;
+  }
+  try {
+    await invoke("exit_app");
+  } catch (error) {
+    store.settingsMessage = String(error);
+    renderSettingsView();
+  }
 }
 
 async function applyWindowChrome(mode) {
@@ -894,6 +911,7 @@ settingsToggle.addEventListener("click", () => {
 
 floatingSettings?.addEventListener("click", openSettings);
 settingsClose.addEventListener("click", closeSettings);
+documentCloseApp?.addEventListener("click", closeApp);
 
 modeTabs.forEach((button) => {
   button.addEventListener("click", () => setMode(button.dataset.modeTab));

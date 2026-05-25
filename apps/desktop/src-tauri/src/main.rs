@@ -455,6 +455,12 @@ fn paste_text(text: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn exit_app(app: AppHandle) {
+    append_log("exit requested from ui");
+    app.exit(0);
+}
+
+#[tauri::command]
 fn start_runtime(app: AppHandle, state: State<'_, DesktopState>) -> Result<(), String> {
     let runtime = state.runtime.clone();
     {
@@ -525,7 +531,8 @@ fn main() {
             end_manual_recording,
             copy_text,
             paste_text,
-            start_runtime
+            start_runtime,
+            exit_app
         ])
         .setup(|app| {
             setup_tray(app)?;
