@@ -4,7 +4,7 @@
 
 ## 1. 文稿模式 (voice-pad) — 只保留文稿编辑区
 
-### 1.1 HTML 删除（[apps/desktop/ui/index.html](apps/desktop/ui/index.html)）
+### 1.1 HTML 删除（[apps/desktop/ui/index.html](../apps/desktop/ui/index.html)）
 
 `#document-pane` 下整段精简，删除：
 
@@ -33,7 +33,7 @@
 - 当前三个 apply mode 按钮（插入光标 / 替换全文 / 追加末尾）配合"语音结果写入"的语义。删除"最近转写"后语音流仍会触发 `apply_text_to_document_editor`，因此 **apply-mode 按钮要保留**，文稿模式下"按住说话松开" → 文本按当前 apply mode 写入 textarea。
 - 工具栏中删除 `#document-copy-final`（最终输出不再独立暴露），保留 `#document-copy-editor`、`#document-clear-editor`。
 
-### 1.2 JS 调整（[apps/desktop/ui/main.js](apps/desktop/ui/main.js)）
+### 1.2 JS 调整（[apps/desktop/ui/main.js](../apps/desktop/ui/main.js)）
 
 删除以下 DOM 句柄声明与所有引用：
 
@@ -57,7 +57,7 @@ copyFinal
 
 `store` 字段裁剪：删 `rewriteVariants`、`activeVariant`、`rawTranscript`、`finalText`（如果仅用于已删 UI）、`resultProfile`、`resultMeta`、`trace`、`traceVisible`。保留 `documentText`（用于 startup/error 时态可观察）只在必要时保留——审查后删 `documentText`、`rawTranscript`，仅留 `documentEditorText` + `editorStatus` + apply-mode。
 
-### 1.3 CSS 清理（[apps/desktop/ui/styles.css](apps/desktop/ui/styles.css)）
+### 1.3 CSS 清理（[apps/desktop/ui/styles.css](../apps/desktop/ui/styles.css)）
 
 删除与上述被移除 DOM 相关的样式块（共 39 处命中，按类名搜索逐个清理）：
 
@@ -74,7 +74,7 @@ copyFinal
 
 ### 2.1 删除"模型目录"
 
-[apps/desktop/ui/index.html](apps/desktop/ui/index.html) 中删除：
+[apps/desktop/ui/index.html](../apps/desktop/ui/index.html) 中删除：
 
 ```html
 <label class="field">
@@ -83,13 +83,13 @@ copyFinal
 </label>
 ```
 
-[apps/desktop/ui/main.js](apps/desktop/ui/main.js) 中：
+[apps/desktop/ui/main.js](../apps/desktop/ui/main.js) 中：
 
 - 删 `modelDirInput` 句柄
 - `applyConfig`：删 `modelDirInput.value = store.config.model_dir ?? "";`
 - `readConfig`：`model_dir` 字段固定回传 `store.config.model_dir`（即从后端读到什么就写回什么），让后端 `default_model_dir()`/`with_default_model_dir` 继续生效，UI 不暴露这一项。
 
-后端 [main.rs](apps/desktop/src-tauri/src/main.rs) 与 [config.rs](crates/voice-core/src/config.rs) **不动** —— `model_dir` 字段仍存在 app.toml，仍由 `with_default_model_dir` 注入默认值。
+后端 [main.rs](../apps/desktop/src-tauri/src/main.rs) 与 [config.rs](../crates/voice-core/src/config.rs) **不动** —— `model_dir` 字段仍存在 app.toml，仍由 `with_default_model_dir` 注入默认值。
 
 ### 2.2 快捷键 UI 改为单输入框
 
@@ -184,7 +184,7 @@ JS 调整：
 - `applyRewriteConfig`：不再写 model 输入框；`updateRewriteSummary` 删除 provider 显示，但 key status / key env 文案保留（用户仍需知道当前会回退到哪个环境变量）
 - `refreshRewriteKeyStatus`：传 `store.config.rewrite.provider` 即可
 
-后端 [main.rs](apps/desktop/src-tauri/src/main.rs)、[config.rs](crates/voice-core/src/config.rs) **不动** —— provider/model 字段仍在 app.toml 持久化，仅 UI 隐藏。如果将来想换 provider，可直接编辑 app.toml。
+后端 [main.rs](../apps/desktop/src-tauri/src/main.rs)、[config.rs](../crates/voice-core/src/config.rs) **不动** —— provider/model 字段仍在 app.toml 持久化，仅 UI 隐藏。如果将来想换 provider，可直接编辑 app.toml。
 
 API key 输入框、清除按钮、key 保存提示 **保留**。
 
@@ -217,7 +217,7 @@ API key 输入框、清除按钮、key 保存提示 **保留**。
 
 ### 4.3 后端
 
-[apps/desktop/src-tauri/src/main.rs](apps/desktop/src-tauri/src/main.rs) 中保留 `get_diagnostics` 和 `open_log_directory` tauri 命令本身（**不必删**，无副作用，未来日志/诊断 CLI 可能要用）。也可同步删除以减少代码量——可选项。
+[apps/desktop/src-tauri/src/main.rs](../apps/desktop/src-tauri/src/main.rs) 中保留 `get_diagnostics` 和 `open_log_directory` tauri 命令本身（**不必删**，无副作用，未来日志/诊断 CLI 可能要用）。也可同步删除以减少代码量——可选项。
 
 **优先简单**：先只删 UI 入口，命令保留。
 
@@ -229,7 +229,7 @@ API key 输入框、清除按钮、key 保存提示 **保留**。
 
 ## 5. 文档/记忆
 
-- 不动 [CLAUDE.md](CLAUDE.md)（约束仍然有效）
+- 不动 [CLAUDE.md](../CLAUDE.md)（约束仍然有效）
 - 不动 [plan.md](plan.md)（产品路线图，与本次裁剪不冲突）
 - 不动 voice-core / voice-cli / voice-rewrite / voice-asr-* 任何 Rust 代码（仅 desktop 壳 main.rs 不动也通过）
 

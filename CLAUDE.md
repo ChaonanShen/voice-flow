@@ -2,7 +2,7 @@
 
 按住快捷键说话、松开自动粘贴的语音输入法。端侧 ASR 默认，Windows-first。
 
-详细路线见 [plan.md](./plan.md)。本文件只记录从代码本身看不出来的踩坑约束。
+详细路线见 [plans/plan.md](./plans/plan.md)。其余 ai-coding 执行计划与调试笔记也在 [plans/](./plans) 目录下。本文件只记录从代码本身看不出来的踩坑约束。
 
 ## 平台策略
 
@@ -11,13 +11,13 @@
 
 ## Windows 文档读取
 
-- 在 **Windows PowerShell** 下读取 `plan.md`、`README.md`、`desktop_gui_plan.md`、`ai_rewrite_plan.md` 等中文文档时，**必须显式指定 UTF-8**，不要依赖默认编码。
+- 在 **Windows PowerShell** 下读取 `README.md` 以及 `plans/` 下的中文文档时，**必须显式指定 UTF-8**，不要依赖默认编码。
 - 标准读法：
-  - `Get-Content -Path plan.md -Encoding UTF8`
-  - `Get-Content -Path ai_rewrite_plan.md -Encoding UTF8`
-  - `Get-Content -Path desktop_gui_plan.md -Encoding UTF8`
+  - `Get-Content -Path plans/plan.md -Encoding UTF8`
+  - `Get-Content -Path plans/ai_rewrite_plan.md -Encoding UTF8`
+  - `Get-Content -Path plans/desktop_gui_plan.md -Encoding UTF8`
   - `Get-Content -Path README.md -Encoding UTF8`
-- 如果需要整文件读取，也保持显式编码：`Get-Content -Path plan.md -Encoding UTF8 -Raw`
+- 如果需要整文件读取，也保持显式编码：`Get-Content -Path plans/plan.md -Encoding UTF8 -Raw`
 - 未显式带 `-Encoding UTF8` 时，PowerShell 在当前机器上多次出现中文乱码；后续 Codex 会话默认按上面的命令读取。
 
 ## 不要合并的"重复"实现
@@ -44,7 +44,7 @@
 
 - `cargo test --workspace` 跑 voice-core / voice-asr-local 的纯逻辑测试，**不覆盖桌面链路**。
 - 桌面端验收必须在 Windows 上人工跑：启动 `apps/desktop/src-tauri` → 按住 `Alt+Space` → 松开后看悬浮窗"最近文本"更新且粘贴生效。
-- 主分支必须保持可运行：每个 PR 合并后评委可任意时间检出能跑（见 plan.md §6）。
+- 主分支必须保持可运行：每个 PR 合并后评委可任意时间检出能跑（见 plans/plan.md §6）。
 
 ## 配置
 

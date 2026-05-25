@@ -337,8 +337,8 @@ cargo run -p voice-cli -- transcribe docs/fixtures/demo-rewrite.wav --rewrite cl
 **当前状态（2026-05-24）**：
 
 - README 已同步当前 desktop 双模式、ASR engine selection、rewrite、打包与文档入口。
-- 已新增 [`docs/demo-script.md`](./docs/demo-script.md) 作为总 demo 脚本，覆盖悬浮窗模式、文稿模式、local / cloud ASR 和 rewrite。
-- 已新增 [`docs/desktop-packaging.md`](./docs/desktop-packaging.md) 作为桌面端本地打包与 smoke 指南。
+- 已新增 [`demo-script.md`](./demo-script.md) 作为总 demo 脚本，覆盖悬浮窗模式、文稿模式、local / cloud ASR 和 rewrite。
+- 已新增 [`desktop-packaging.md`](./desktop-packaging.md) 作为桌面端本地打包与 smoke 指南。
 - 已在当前开发机自动验证：
   - `cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml`
   - `cargo test -p voice-core`
