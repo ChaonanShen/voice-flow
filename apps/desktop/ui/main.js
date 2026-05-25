@@ -46,84 +46,54 @@ const configDefaults = {
   rewrite: rewriteDefaults,
 };
 
+const HOTKEY_MOD_MAP = {
+  ctrl: "ctrl",
+  control: "ctrl",
+  alt: "alt",
+  option: "alt",
+  shift: "shift",
+  win: "logo",
+  super: "logo",
+  meta: "logo",
+  cmd: "logo",
+  command: "logo",
+};
+
 const dot = document.querySelector("#document-status-dot");
 const stateLabel = document.querySelector("#document-state-label");
-const startupNotice = document.querySelector("#document-startup-notice");
-const startupText = document.querySelector("#document-startup-text");
-const lastTranscript = document.querySelector("#document-last-text");
-const rewriteChip = document.querySelector("#document-rewrite-chip");
-const outputChip = document.querySelector("#document-output-chip");
-const profileChip = document.querySelector("#document-profile-chip");
-const resultMeta = document.querySelector("#document-result-meta");
-const fallbackReason = document.querySelector("#document-fallback-reason");
-const latencySummary = document.querySelector("#document-latency-summary");
-const traceToggle = document.querySelector("#document-trace-toggle");
-const diffRaw = document.querySelector("#document-diff-raw");
-const diffFinal = document.querySelector("#document-diff-final");
 const documentEditor = document.querySelector("#document-editor");
 const documentEditorStatus = document.querySelector("#document-editor-status");
 const documentEditorModeHint = document.querySelector("#document-editor-mode-hint");
 const documentApplyModeButtons = document.querySelectorAll("[data-document-apply-mode]");
-const copyFinal = document.querySelector("#document-copy-final");
 const copyEditor = document.querySelector("#document-copy-editor");
 const clearEditor = document.querySelector("#document-clear-editor");
-const variantPanel = document.querySelector("#document-variant-panel");
-const variantText = document.querySelector("#document-variant-text");
-const variantTabs = document.querySelectorAll(".document-variant-tab");
-const copyVariant = document.querySelector("#document-copy-variant");
-const pasteVariant = document.querySelector("#document-paste-variant");
-const variantActionStatus = document.querySelector("#document-variant-action-status");
 const micButton = document.querySelector("#floating-mic-button");
-const floatingSettings = document.querySelector("#floating-settings");
 const settingsClose = document.querySelector("#settings-close");
 const runtimeError = document.querySelector("#document-runtime-error");
 const runtimeErrorText = document.querySelector("#document-runtime-error-text");
 const pauseToggle = document.querySelector("#document-pause-toggle");
 const settingsToggle = document.querySelector("#document-settings-toggle");
 const documentCloseApp = document.querySelector("#document-close-app");
-const settingsPanel = document.querySelector("#settings-panel");
 const settingsMessage = document.querySelector("#settings-message");
 const modeTabs = document.querySelectorAll("[data-mode-tab]");
 const modePanes = document.querySelectorAll("[data-mode-pane]");
 const asrCloudFields = document.querySelector("#settings-asr-cloud-fields");
-const modelDirInput = document.querySelector("#settings-model-dir");
 const asrApiKey = document.querySelector("#settings-asr-api-key");
 const clearAsrKey = document.querySelector("#settings-clear-asr-key");
 const asrKeyStatus = document.querySelector("#settings-asr-key-status");
-const hotkeyCtrl = document.querySelector("#settings-hotkey-ctrl");
-const hotkeyAlt = document.querySelector("#settings-hotkey-alt");
-const hotkeyShift = document.querySelector("#settings-hotkey-shift");
-const hotkeyLogo = document.querySelector("#settings-hotkey-logo");
-const hotkeyKey = document.querySelector("#settings-hotkey-key");
+const hotkeyCombo = document.querySelector("#settings-hotkey-combo");
 const saveSettings = document.querySelector("#settings-save");
 const settingsTabs = document.querySelectorAll("[data-settings-tab]");
 const settingsPanes = document.querySelectorAll("[data-settings-pane]");
-const refreshDiagnostics = document.querySelector("#settings-refresh-diagnostics");
-const openLogs = document.querySelector("#settings-open-logs");
-const diagConfigPath = document.querySelector("#settings-diag-config-path");
-const diagLogPath = document.querySelector("#settings-diag-log-path");
-const diagModelDir = document.querySelector("#settings-diag-model-dir");
-const diagRuntime = document.querySelector("#settings-diag-runtime");
-const diagAsr = document.querySelector("#settings-diag-asr");
-const diagRewriteKey = document.querySelector("#settings-diag-rewrite-key");
 const rewriteEnabled = document.querySelector("#settings-rewrite-enabled");
 const rewriteEnabledLabel = document.querySelector("#settings-rewrite-enabled-label");
 const rewriteProfile = document.querySelector("#settings-rewrite-profile");
-const rewriteModel = document.querySelector("#settings-rewrite-model");
 const rewriteTimeout = document.querySelector("#settings-rewrite-timeout");
 const rewriteApiKey = document.querySelector("#settings-rewrite-api-key");
 const clearRewriteKey = document.querySelector("#settings-clear-rewrite-key");
 const rewriteKeyStatus = document.querySelector("#settings-rewrite-key-status");
-const rewriteProviderSummary = document.querySelector("#settings-rewrite-provider-summary");
 const rewriteProfileSummary = document.querySelector("#settings-rewrite-profile-summary");
 const rewriteKeySummary = document.querySelector("#settings-rewrite-key-summary");
-const traceOverlay = document.querySelector("#document-trace-overlay");
-const traceClose = document.querySelector("#document-trace-close");
-const traceProfile = document.querySelector("#document-trace-profile");
-const tracePreprocess = document.querySelector("#document-trace-preprocess");
-const traceLlm = document.querySelector("#document-trace-llm");
-const traceFallback = document.querySelector("#document-trace-fallback");
-const traceError = document.querySelector("#document-trace-error");
 
 const invoke = window.__TAURI__?.core?.invoke;
 const listen = window.__TAURI__?.event?.listen;
@@ -141,8 +111,6 @@ const contentModes = new Set(["floating", "voice-pad"]);
 const store = {
   config: normalizeConfig(configDefaults),
   settingsTab: "input",
-  activeVariant: "clean",
-  rewriteVariants: {},
   asrKeySaved: false,
   rewriteKeySaved: false,
   paused: false,
@@ -151,20 +119,9 @@ const store = {
   outputMode: "floating_input",
   currentState: "idle",
   manualRecording: false,
-  documentText: "",
-  rawTranscript: "",
-  finalText: "",
   documentEditorText: "",
   documentApplyMode: "insert",
-  resultProfile: "off",
   runtimeError: "",
-  resultMeta: {
-    fallbackReason: "",
-    latencySummary: "",
-  },
-  trace: null,
-  traceVisible: false,
-  startupNotice: "",
   editorStatus: "",
   settingsMessage: "",
 };
@@ -187,15 +144,6 @@ function renderDocumentMode() {
   stateLabel.textContent = store.paused
     ? "已暂停"
     : labels[store.currentState] ?? labels.idle;
-  startupNotice.hidden = !store.startupNotice;
-  startupText.textContent = store.startupNotice;
-  lastTranscript.textContent = store.documentText || "尚无识别结果";
-  diffRaw.textContent = store.rawTranscript || "尚无转写结果";
-  diffFinal.textContent = store.finalText || "尚无输出结果";
-  outputChip.textContent =
-    store.outputMode === "voice_pad" ? "输出到文稿" : "输出到外部应用";
-  outputChip.dataset.mode = store.outputMode;
-  profileChip.textContent = store.resultProfile;
   runtimeError.hidden = !store.runtimeError;
   runtimeErrorText.textContent = store.runtimeError;
   pauseToggle.dataset.active = String(store.paused);
@@ -218,22 +166,6 @@ function renderRuntimeViews() {
   renderFloatingMode();
   renderDocumentMode();
   renderSettingsView();
-  renderTraceOverlay();
-}
-
-function renderTraceOverlay() {
-  traceOverlay.hidden = !store.traceVisible;
-  traceProfile.textContent = store.trace?.profile ?? "-";
-  tracePreprocess.textContent = Number.isFinite(Number(store.trace?.preprocess_ms))
-    ? `${store.trace.preprocess_ms}ms`
-    : "-";
-  traceLlm.textContent = store.trace?.llm_called
-    ? Number.isFinite(Number(store.trace?.llm_ms))
-      ? `${store.trace.llm_ms}ms`
-      : "called"
-    : "not called";
-  traceFallback.textContent = store.trace?.fallback ? "yes" : "no";
-  traceError.textContent = store.trace?.error ?? "-";
 }
 
 function renderModeVisibility() {
@@ -260,15 +192,6 @@ function applyState(event) {
     store.runtimeError = "";
   }
 
-  if (["recording", "transcribing", "rewriting"].includes(state)) {
-    store.rewriteVariants = {};
-    updateVariantPanel();
-  }
-
-  if (event?.transcript) {
-    store.documentText = event.transcript;
-  }
-
   if (event?.error) {
     const message = String(event.error);
     store.runtimeError = message;
@@ -283,9 +206,6 @@ function applyPauseState(event) {
     setManualRecording(false);
   }
   renderRuntimeViews();
-  if (store.settingsTab === "diagnostics") {
-    refreshDiagnosticsPanel();
-  }
 }
 
 function setManualRecording(active) {
@@ -294,24 +214,9 @@ function setManualRecording(active) {
 }
 
 function applyRewriteResult(result) {
-  store.rewriteVariants = {
-    clean: result?.text ?? "",
-    ...(result?.variants ?? {}),
-  };
-  store.activeVariant = store.rewriteVariants[store.activeVariant]
-    ? store.activeVariant
-    : "clean";
-  variantActionStatus.textContent = "";
-  if (store.rewriteVariants.clean) {
-    store.documentText = store.rewriteVariants.clean;
-    store.finalText = store.rewriteVariants.clean;
-  }
-  store.resultProfile = result?.profile ?? store.resultProfile;
   if (result?.fallback && result.error) {
     store.settingsMessage = result.error;
   }
-  updateResultMeta(result);
-  updateVariantPanel();
   renderRuntimeViews();
 }
 
@@ -321,22 +226,6 @@ function applyDesktopOutputResult(result) {
   }
 
   store.outputMode = result.output_mode ?? store.outputMode;
-  store.rawTranscript = result.raw_transcript ?? "";
-  store.finalText = result.final_text ?? "";
-  store.documentText = store.finalText || store.rawTranscript;
-  store.resultProfile = result.profile ?? "off";
-  store.rewriteVariants = {
-    clean: result.final_text ?? "",
-    ...(result.variants ?? {}),
-  };
-  store.activeVariant = store.rewriteVariants[store.activeVariant]
-    ? store.activeVariant
-    : "clean";
-  updateResultMeta({
-    fallback: result.fallback,
-    error: result.error,
-    timings: result.timings,
-  });
   if (result.output_mode === "voice_pad" && result.final_text) {
     applyTextToDocumentEditor(result.final_text);
   }
@@ -345,37 +234,7 @@ function applyDesktopOutputResult(result) {
       ? "已输出到外部应用"
       : "未写入外部应用";
   }
-  updateVariantPanel();
   renderRuntimeViews();
-}
-
-function applyRewriteTrace(trace) {
-  store.trace = trace ?? null;
-  renderTraceOverlay();
-}
-
-function updateResultMeta(result) {
-  const timings = result?.timings ?? {};
-  const parts = [];
-  if (Number.isFinite(Number(timings.asr_ms))) {
-    parts.push(`ASR ${timings.asr_ms}ms`);
-  }
-  if (Number.isFinite(Number(timings.rewrite_ms))) {
-    parts.push(`rewrite ${timings.rewrite_ms}ms`);
-  }
-  if (Number.isFinite(Number(timings.paste_ms))) {
-    parts.push(`paste ${timings.paste_ms}ms`);
-  }
-
-  const reason = result?.fallback ? result?.error ?? "rewrite fallback" : "";
-  store.resultMeta = {
-    fallbackReason: reason ? `fallback: ${reason}` : "",
-    latencySummary: parts.join(" / "),
-  };
-  fallbackReason.textContent = store.resultMeta.fallbackReason;
-  fallbackReason.dataset.active = String(Boolean(reason));
-  latencySummary.textContent = store.resultMeta.latencySummary;
-  resultMeta.hidden = !reason && parts.length === 0;
 }
 
 function normalizeConfig(config) {
@@ -400,58 +259,76 @@ function normalizeConfig(config) {
 function applyConfig(config) {
   store.config = normalizeConfig(config);
   setAsrEngine(store.config.asr.engine ?? "local");
-  modelDirInput.value = store.config.model_dir ?? "";
-  hotkeyCtrl.checked = Boolean(store.config.hotkey.ctrl);
-  hotkeyAlt.checked = Boolean(store.config.hotkey.alt);
-  hotkeyShift.checked = Boolean(store.config.hotkey.shift);
-  hotkeyLogo.checked = Boolean(store.config.hotkey.logo);
-  hotkeyKey.value = store.config.hotkey.key ?? "Space";
+  hotkeyCombo.value = formatHotkeyCombo(store.config.hotkey);
   applyRewriteConfig(store.config.rewrite);
   updateAsrSummary();
 }
 
 function readConfig() {
-  const modelDir = modelDirInput.value.trim();
+  const parsed = parseHotkeyCombo(hotkeyCombo.value.trim());
   return {
-    model_dir: modelDir.length > 0 ? modelDir : null,
+    model_dir: store.config.model_dir ?? null,
     asr: {
       engine: currentAsrEngine(),
     },
-    hotkey: {
-      ctrl: hotkeyCtrl.checked,
-      alt: hotkeyAlt.checked,
-      shift: hotkeyShift.checked,
-      logo: hotkeyLogo.checked,
-      key: hotkeyKey.value.trim() || "Space",
-    },
+    hotkey: parsed.config ?? store.config.hotkey,
     rewrite: store.config.rewrite,
   };
 }
 
+function parseHotkeyCombo(combo) {
+  const parts = combo
+    .split("+")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (parts.length === 0) {
+    return { error: "快捷键不能为空" };
+  }
+  const flags = { ctrl: false, alt: false, shift: false, logo: false };
+  const keyToken = parts[parts.length - 1];
+  for (const token of parts.slice(0, -1)) {
+    const slot = HOTKEY_MOD_MAP[token.toLowerCase()];
+    if (!slot) {
+      return { error: `未知修饰键: ${token}` };
+    }
+    flags[slot] = true;
+  }
+  if (!flags.ctrl && !flags.alt && !flags.shift && !flags.logo) {
+    return { error: "至少需要一个修饰键" };
+  }
+  if (!keyToken) {
+    return { error: "缺少主键" };
+  }
+  if (HOTKEY_MOD_MAP[keyToken.toLowerCase()]) {
+    return { error: "主键不能是修饰键" };
+  }
+  return { config: { ...flags, key: normalizeHotkeyKey(keyToken) } };
+}
+
+function formatHotkeyCombo(config) {
+  const parts = [];
+  if (config.ctrl) parts.push("ctrl");
+  if (config.alt) parts.push("alt");
+  if (config.shift) parts.push("shift");
+  if (config.logo) parts.push("win");
+  parts.push((config.key ?? "Space").toLowerCase());
+  return parts.join("+");
+}
+
+function normalizeHotkeyKey(token) {
+  if (/^[a-zA-Z]$/.test(token)) {
+    return token.toUpperCase();
+  }
+  return token.charAt(0).toUpperCase() + token.slice(1).toLowerCase();
+}
+
 function validateHotkeyForm() {
-  const key = hotkeyKey.value.trim();
-  if (!key) {
-    return "快捷键主键不能为空";
-  }
-  if (key.includes("+") || key.split(/\s+/).length > 1) {
-    return "主键只填单个按键，修饰键使用复选框";
-  }
-  if (
-    !hotkeyCtrl.checked &&
-    !hotkeyAlt.checked &&
-    !hotkeyShift.checked &&
-    !hotkeyLogo.checked
-  ) {
-    return "快捷键至少需要一个修饰键";
-  }
-  return null;
+  const parsed = parseHotkeyCombo(hotkeyCombo.value.trim());
+  return parsed.error ?? null;
 }
 
 function currentRewriteProvider() {
-  return (
-    document.querySelector('input[name="settings-rewrite-provider"]:checked')?.value ??
-    rewriteDefaults.provider
-  );
+  return store.config.rewrite.provider ?? rewriteDefaults.provider;
 }
 
 function currentAsrEngine() {
@@ -472,32 +349,21 @@ function applyRewriteConfig(rewrite) {
   };
   rewriteEnabled.checked = Boolean(config.enabled);
   rewriteProfile.value = config.default_profile ?? rewriteDefaults.default_profile;
-  setRewriteProvider(config.provider ?? rewriteDefaults.provider);
-  rewriteModel.value =
-    config.model ?? providerDefaults[currentRewriteProvider()]?.model ?? "";
   rewriteTimeout.value = String(config.timeout_ms ?? rewriteDefaults.timeout_ms);
   rewriteApiKey.value = "";
-  store.rewriteVariants = {};
   updateRewriteSummary();
 }
 
 function readRewriteConfig() {
-  const model = rewriteModel.value.trim();
   const timeout = Number.parseInt(rewriteTimeout.value, 10);
   return {
     enabled: rewriteEnabled.checked,
     provider: currentRewriteProvider(),
-    model: model.length > 0 ? model : null,
+    model: null,
     default_profile: rewriteProfile.value,
     timeout_ms: Number.isFinite(timeout) ? timeout : rewriteDefaults.timeout_ms,
     user_dictionary: {},
   };
-}
-
-function setRewriteProvider(provider) {
-  document.querySelectorAll('input[name="settings-rewrite-provider"]').forEach((input) => {
-    input.checked = input.value === provider;
-  });
 }
 
 function updateRewriteSummary() {
@@ -505,15 +371,11 @@ function updateRewriteSummary() {
   const profile = rewriteProfile.value;
   const meta = providerDefaults[provider] ?? providerDefaults.deepseek;
   rewriteEnabledLabel.textContent = rewriteEnabled.checked ? "开启" : "关闭";
-  rewriteProviderSummary.textContent = provider;
   rewriteProfileSummary.textContent = profile;
   rewriteKeySummary.textContent = meta.env;
   rewriteKeyStatus.textContent = store.rewriteKeySaved
     ? `${provider} key 已保存`
     : `未保存，将回退到 ${meta.env}`;
-  rewriteChip.textContent = rewriteEnabled.checked ? `改写 ${profile}` : "改写关闭";
-  rewriteChip.dataset.enabled = String(rewriteEnabled.checked);
-  updateVariantPanel();
 }
 
 function updateAsrSummary() {
@@ -633,9 +495,6 @@ function switchSettingsTab(tab) {
   settingsPanes.forEach((pane) => {
     pane.hidden = pane.dataset.settingsPane !== tab;
   });
-  if (tab === "diagnostics") {
-    refreshDiagnosticsPanel();
-  }
 }
 
 function setMode(mode) {
@@ -651,9 +510,6 @@ function setMode(mode) {
   renderRuntimeViews();
   void applyWindowChrome(mode);
   void syncOutputMode(mode);
-  if (mode === "settings" && store.settingsTab === "diagnostics") {
-    refreshDiagnosticsPanel();
-  }
 }
 
 function openSettings() {
@@ -779,77 +635,6 @@ async function syncOutputMode(mode) {
   }
 }
 
-async function refreshDiagnosticsPanel() {
-  if (!invoke) {
-    diagConfigPath.textContent = "预览模式";
-    diagLogPath.textContent = "预览模式";
-    diagModelDir.textContent = "预览模式";
-    diagRuntime.textContent = "预览模式";
-    diagRewriteKey.textContent = "预览模式";
-    return;
-  }
-
-  try {
-    const diagnostics = await invoke("get_diagnostics");
-    diagConfigPath.textContent = diagnostics.config_path ?? "-";
-    diagLogPath.textContent = diagnostics.log_path ?? "-";
-    diagModelDir.textContent = diagnostics.model_dir
-      ? `${diagnostics.model_dir} (${diagnostics.model_dir_exists ? "存在" : "缺失"})`
-      : "未配置";
-    store.startupNotice =
-      diagnostics.model_dir_exists
-        ? ""
-        : diagnostics.model_dir
-          ? "当前模型目录不存在，请在设置中修正模型目录后保存。"
-          : "当前尚未配置模型目录，请在设置中填写模型目录后保存。";
-    diagRuntime.textContent = diagnostics.runtime_running
-      ? diagnostics.paused
-        ? "已暂停"
-        : diagnostics.restart_requested
-          ? "运行中，等待重载"
-          : "运行中"
-      : "未运行";
-    diagAsr.textContent =
-      diagnostics.asr_engine === "cloud"
-        ? diagnostics.asr_key_saved
-          ? "cloud（key 已保存）"
-          : "cloud（key 缺失）"
-        : "local";
-    diagRewriteKey.textContent = diagnostics.rewrite_key_saved
-      ? `${diagnostics.rewrite_provider} 已保存`
-      : `${diagnostics.rewrite_provider} 未保存`;
-    outputChip.textContent =
-      diagnostics.output_mode === "voice_pad" ? "输出到文稿" : "输出到外部应用";
-    renderRuntimeViews();
-  } catch (error) {
-    store.settingsMessage = String(error);
-    renderSettingsView();
-  }
-}
-
-function switchVariantTab(variant) {
-  store.activeVariant = variant;
-  variantTabs.forEach((button) => {
-    button.classList.toggle("is-active", button.dataset.variantTab === variant);
-  });
-  variantText.textContent = store.rewriteVariants[variant] ?? "";
-}
-
-function updateVariantPanel() {
-  const show =
-    rewriteEnabled.checked &&
-    rewriteProfile.value === "multi" &&
-    Object.keys(store.rewriteVariants).length > 1;
-  variantPanel.hidden = !show;
-  copyVariant.disabled = !show;
-  pasteVariant.disabled = !show;
-  if (show) {
-    switchVariantTab(store.activeVariant);
-  } else {
-    variantActionStatus.textContent = "";
-  }
-}
-
 async function boot() {
   renderModeVisibility();
   void applyWindowChrome(store.mode);
@@ -865,7 +650,6 @@ async function boot() {
   await listen("realtime-state", (event) => applyState(event.payload));
   await listen("pause-state", (event) => applyPauseState(event.payload));
   await listen("rewrite-result", (event) => applyRewriteResult(event.payload));
-  await listen("rewrite-trace", (event) => applyRewriteTrace(event.payload));
   await listen("desktop-output-result", (event) => applyDesktopOutputResult(event.payload));
   await listen("output-mode-updated", (event) => {
     store.outputMode = event.payload ?? "floating_input";
@@ -877,9 +661,6 @@ async function boot() {
   });
   await listen("paste-failure", (event) => {
     const payload = event.payload;
-    if (payload?.text) {
-      store.documentText = payload.text;
-    }
     store.runtimeError = `文本已生成，但自动粘贴失败：${payload?.error ?? ""}`;
     renderRuntimeViews();
   });
@@ -909,7 +690,6 @@ settingsToggle.addEventListener("click", () => {
   }
 });
 
-floatingSettings?.addEventListener("click", openSettings);
 settingsClose.addEventListener("click", closeSettings);
 documentCloseApp?.addEventListener("click", closeApp);
 
@@ -993,68 +773,10 @@ async function endManualRecording() {
 settingsTabs.forEach((button) => {
   button.addEventListener("click", () => switchSettingsTab(button.dataset.settingsTab));
 });
-refreshDiagnostics.addEventListener("click", refreshDiagnosticsPanel);
-openLogs.addEventListener("click", async () => {
-  if (!invoke) {
-    store.settingsMessage = "预览模式";
-    renderSettingsView();
-    return;
-  }
-  try {
-    await invoke("open_log_directory");
-    store.settingsMessage = "已打开日志目录";
-    renderSettingsView();
-  } catch (error) {
-    store.settingsMessage = String(error);
-    renderSettingsView();
-  }
-});
-traceToggle.addEventListener("click", () => {
-  store.traceVisible = true;
-  renderTraceOverlay();
-});
-traceClose.addEventListener("click", () => {
-  store.traceVisible = false;
-  renderTraceOverlay();
-});
 
 rewriteEnabled.addEventListener("change", updateRewriteSummary);
 rewriteProfile.addEventListener("change", updateRewriteSummary);
-variantTabs.forEach((button) => {
-  button.addEventListener("click", () => switchVariantTab(button.dataset.variantTab));
-});
-copyVariant.addEventListener("click", async () => {
-  await writeSelectedVariant("copy_text", "复制中...", "已复制");
-});
-pasteVariant.addEventListener("click", async () => {
-  await writeSelectedVariant("paste_text", "粘贴中...", "已粘贴");
-});
 
-async function writeSelectedVariant(command, pendingLabel, doneLabel) {
-  const text = store.rewriteVariants[store.activeVariant] ?? "";
-  if (!text.trim()) {
-    variantActionStatus.textContent = "当前版本为空";
-    return;
-  }
-
-  variantActionStatus.textContent = pendingLabel;
-  try {
-    if (command === "paste_text") {
-      applyTextToDocumentEditor(text);
-      variantActionStatus.textContent = doneLabel;
-      renderRuntimeViews();
-      return;
-    }
-    if (!invoke) {
-      await navigator.clipboard.writeText(text);
-    } else {
-      await invoke(command, { text });
-    }
-    variantActionStatus.textContent = doneLabel;
-  } catch (error) {
-    variantActionStatus.textContent = String(error);
-  }
-}
 documentEditor.addEventListener("input", () => {
   store.documentEditorText = documentEditor.value;
 });
@@ -1063,25 +785,6 @@ documentApplyModeButtons.forEach((button) => {
     store.documentApplyMode = button.dataset.documentApplyMode;
     renderRuntimeViews();
   });
-});
-copyFinal.addEventListener("click", async () => {
-  if (!store.finalText.trim()) {
-    store.editorStatus = "当前没有最终输出";
-    renderRuntimeViews();
-    return;
-  }
-  try {
-    if (!invoke) {
-      await navigator.clipboard.writeText(store.finalText);
-    } else {
-      await invoke("copy_text", { text: store.finalText });
-    }
-    store.editorStatus = "已复制最终输出";
-    renderRuntimeViews();
-  } catch (error) {
-    store.editorStatus = String(error);
-    renderRuntimeViews();
-  }
 });
 copyEditor.addEventListener("click", async () => {
   if (!store.documentEditorText.trim()) {
@@ -1106,15 +809,6 @@ clearEditor.addEventListener("click", () => {
   store.documentEditorText = "";
   store.editorStatus = "已清空文稿";
   renderRuntimeViews();
-});
-document.querySelectorAll('input[name="settings-rewrite-provider"]').forEach((input) => {
-  input.addEventListener("change", async () => {
-    if (!rewriteModel.value.trim()) {
-      rewriteModel.value = providerDefaults[currentRewriteProvider()]?.model ?? "";
-    }
-    rewriteApiKey.value = "";
-    await refreshRewriteKeyStatus();
-  });
 });
 document.querySelectorAll('input[name="settings-asr-engine"]').forEach((input) => {
   input.addEventListener("change", async () => {

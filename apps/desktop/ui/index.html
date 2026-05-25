@@ -53,47 +53,7 @@
           </button>
         </section>
 
-        <section id="document-startup-notice" class="document-startup-notice" hidden aria-label="启动提示">
-          <p id="document-startup-text"></p>
-        </section>
-
         <section class="document-main" aria-label="文稿工作区">
-          <section class="document-card document-card-transcript" aria-label="最近一次识别文本">
-            <div class="document-transcript-meta">
-              <p class="label">最近转写</p>
-              <div class="document-chip-row">
-                <span id="document-output-chip">输出到文稿</span>
-                <span id="document-rewrite-chip">改写关闭</span>
-              </div>
-            </div>
-            <p id="document-last-text">尚无识别结果</p>
-
-          <div class="document-result-meta" id="document-result-meta" hidden>
-            <span id="document-fallback-reason"></span>
-            <span id="document-latency-summary"></span>
-          </div>
-          <div class="document-trace-actions">
-            <button id="document-trace-toggle" type="button">查看 trace</button>
-          </div>
-        </section>
-
-          <section class="document-card document-card-diff" aria-label="原始转写与最终输出差异">
-            <div class="document-diff-header">
-              <p class="label">转写与输出</p>
-              <span id="document-profile-chip">off</span>
-            </div>
-            <div class="document-diff-grid">
-              <article class="document-diff-block">
-                <p class="document-diff-label">原始转写</p>
-                <div id="document-diff-raw" class="document-diff-content">尚无转写结果</div>
-              </article>
-              <article class="document-diff-block">
-                <p class="document-diff-label">最终输出</p>
-                <div id="document-diff-final" class="document-diff-content">尚无输出结果</div>
-              </article>
-            </div>
-          </section>
-
           <section class="document-card document-card-editor" aria-label="文稿编辑区">
             <div class="document-editor-header">
               <div>
@@ -121,35 +81,11 @@
             ></textarea>
 
             <div class="document-editor-toolbar">
-              <button id="document-copy-final" type="button">复制最终输出</button>
               <button id="document-copy-editor" type="button">复制全文稿</button>
               <button id="document-clear-editor" type="button">清空文稿</button>
               <span id="document-editor-status"></span>
             </div>
           </section>
-
-          <div class="document-variant-panel" id="document-variant-panel" hidden aria-label="改写候选">
-            <div class="document-variant-tabs" role="tablist" aria-label="改写版本">
-              <button class="document-variant-tab is-active" type="button" data-variant-tab="clean">
-                Clean
-              </button>
-              <button class="document-variant-tab" type="button" data-variant-tab="polish">
-                Polish
-              </button>
-              <button class="document-variant-tab" type="button" data-variant-tab="wechat">
-                Wechat
-              </button>
-              <button class="document-variant-tab" type="button" data-variant-tab="bullets">
-                Bullets
-              </button>
-            </div>
-            <div class="document-variant-actions">
-              <button id="document-copy-variant" type="button">复制选中版本</button>
-              <button id="document-paste-variant" type="button">写入文稿</button>
-              <span id="document-variant-action-status"></span>
-            </div>
-            <p id="document-variant-text"></p>
-          </div>
         </section>
 
         <section class="document-runtime-error" id="document-runtime-error" hidden aria-label="运行错误">
@@ -198,15 +134,6 @@
           >
             改写
           </button>
-          <button
-            class="settings-tab"
-            type="button"
-            role="tab"
-            aria-selected="false"
-            data-settings-tab="diagnostics"
-          >
-            诊断
-          </button>
         </div>
 
         <div class="settings-pane" data-settings-pane="input">
@@ -224,11 +151,6 @@
             </div>
           </div>
 
-          <label class="field">
-            <span>模型目录</span>
-            <input id="settings-model-dir" type="text" spellcheck="false" />
-          </label>
-
           <div id="settings-asr-cloud-fields" class="settings-asr-cloud-fields" hidden>
             <label class="field">
               <span>DashScope API key</span>
@@ -241,16 +163,11 @@
             <p class="pane-note">Cloud ASR 使用 DashScope Paraformer-realtime-v2。API key 保存到系统凭据管理器，不写入 app.toml。</p>
           </div>
 
-          <div class="hotkey-grid" aria-label="快捷键设置">
-            <label><input id="settings-hotkey-ctrl" type="checkbox" />Ctrl</label>
-            <label><input id="settings-hotkey-alt" type="checkbox" />Alt</label>
-            <label><input id="settings-hotkey-shift" type="checkbox" />Shift</label>
-            <label><input id="settings-hotkey-logo" type="checkbox" />Win</label>
-            <label class="field hotkey-key">
-              <span>键</span>
-              <input id="settings-hotkey-key" type="text" />
-            </label>
-          </div>
+          <label class="field">
+            <span>快捷键</span>
+            <input id="settings-hotkey-combo" type="text" spellcheck="false" placeholder="例如：alt+space" />
+          </label>
+          <p class="pane-note">支持 ctrl/alt/shift/win 组合，最后一段是主键。例：alt+space、ctrl+shift+r。</p>
         </div>
 
         <div class="settings-pane" data-settings-pane="rewrite" hidden>
@@ -263,7 +180,7 @@
           </label>
 
           <label class="field">
-            <span>默认档</span>
+            <span>改写风格</span>
             <select id="settings-rewrite-profile">
               <option value="clean">Clean</option>
               <option value="polish">Polish</option>
@@ -274,29 +191,6 @@
               <option value="prompt">Prompt</option>
               <option value="multi">Multi</option>
             </select>
-          </label>
-
-          <div class="field">
-            <span>Provider</span>
-            <div class="segmented" role="radiogroup" aria-label="Rewrite provider">
-              <label>
-                <input type="radio" name="settings-rewrite-provider" value="deepseek" />
-                <span>DeepSeek</span>
-              </label>
-              <label>
-                <input type="radio" name="settings-rewrite-provider" value="dashscope" />
-                <span>DashScope</span>
-              </label>
-              <label>
-                <input type="radio" name="settings-rewrite-provider" value="openai" />
-                <span>OpenAI</span>
-              </label>
-            </div>
-          </div>
-
-          <label class="field">
-            <span>模型</span>
-            <input id="settings-rewrite-model" type="text" spellcheck="false" />
           </label>
 
           <div class="rewrite-grid">
@@ -316,62 +210,15 @@
           </div>
 
           <div class="rewrite-summary" aria-label="当前改写设置">
-            <span id="settings-rewrite-provider-summary">deepseek</span>
             <span id="settings-rewrite-profile-summary">clean</span>
             <span id="settings-rewrite-key-summary">DEEPSEEK_API_KEY</span>
           </div>
           <p class="pane-note">API key 会保存到系统凭据管理器，不写入 app.toml；留空保存只更新改写设置。</p>
         </div>
 
-        <div class="settings-pane" data-settings-pane="diagnostics" hidden>
-          <div class="diagnostics-grid" id="settings-diagnostics-grid">
-            <span>配置</span>
-            <strong id="settings-diag-config-path">-</strong>
-            <span>日志</span>
-            <strong id="settings-diag-log-path">-</strong>
-            <span>模型目录</span>
-            <strong id="settings-diag-model-dir">-</strong>
-            <span>Runtime</span>
-            <strong id="settings-diag-runtime">-</strong>
-            <span>ASR</span>
-            <strong id="settings-diag-asr">-</strong>
-            <span>Rewrite key</span>
-            <strong id="settings-diag-rewrite-key">-</strong>
-          </div>
-          <div class="settings-diagnostics-actions">
-            <button id="settings-refresh-diagnostics" class="secondary-action" type="button">
-              刷新诊断
-            </button>
-            <button id="settings-open-logs" class="secondary-action" type="button">
-              打开日志目录
-            </button>
-          </div>
-        </div>
-
         <div class="settings-actions">
           <button id="settings-save" type="button">保存</button>
           <span id="settings-message" role="status"></span>
-        </div>
-      </section>
-
-      <section id="document-trace-overlay" class="document-trace-overlay" hidden aria-label="改写 trace">
-        <div class="document-trace-card">
-          <div class="document-trace-header">
-            <strong>Rewrite Trace</strong>
-            <button id="document-trace-close" type="button">关闭</button>
-          </div>
-          <div class="document-trace-grid">
-            <span>Profile</span>
-            <strong id="document-trace-profile">-</strong>
-            <span>Preprocess</span>
-            <strong id="document-trace-preprocess">-</strong>
-            <span>LLM</span>
-            <strong id="document-trace-llm">-</strong>
-            <span>Fallback</span>
-            <strong id="document-trace-fallback">-</strong>
-            <span>Error</span>
-            <strong id="document-trace-error">-</strong>
-          </div>
         </div>
       </section>
     </main>
