@@ -150,7 +150,7 @@ cargo run -p voice-cli -- transcribe out.wav --model-dir "$modelDir"
 cargo run -p voice-cli -- listen-hotkey
 ```
 
-按 `Alt+Space`，终端应打印 pressed / released 事件。
+按 `Ctrl+Alt+Space`，终端应打印 pressed / released 事件。
 
 然后测试完整链路：
 
@@ -158,7 +158,7 @@ cargo run -p voice-cli -- listen-hotkey
 cargo run -p voice-cli -- push-to-talk-transcribe --model-dir "$modelDir"
 ```
 
-启动后切到记事本或任意输入框，按住 `Alt+Space` 说话，松开后应该自动完成：
+启动后切到记事本或任意输入框，按住 `Ctrl+Alt+Space` 说话，松开后应该自动完成：
 
 1. 停止录音
 2. 端侧 ASR 转写
@@ -194,7 +194,7 @@ export SHERPA_ONNX_ARCHIVE_DIR="$(cygpath -w "$HOME/.cache/voice-flow/sherpa-onn
 cargo run
 ```
 
-启动后应出现一个置顶悬浮窗。切到记事本、VS Code 或任意输入框，按住 `Alt+Space` 说话，松开后应自动完成转写、写入剪贴板并粘贴到当前光标位置；悬浮窗应显示录音、转写、完成状态和最近一次识别文本。
+启动后应出现一个置顶悬浮窗。切到记事本、VS Code 或任意输入框，按住 `Ctrl+Alt+Space` 说话，松开后应自动完成转写、写入剪贴板并粘贴到当前光标位置；悬浮窗应显示录音、转写、完成状态和最近一次识别文本。
 
 设置面板可以修改：
 
@@ -210,7 +210,7 @@ cargo run
 - 找不到 `win-x64-static-MT-Release-lib` archive：确认下载的是 Windows archive，不是 Linux archive。
 - `SHERPA_ONNX_ARCHIVE_DIR does not contain expected archive`：确认 `$env:SHERPA_ONNX_ARCHIVE_DIR` 指向包含 `sherpa-onnx-v1.13.2-win-x64-static-MT-Release-lib.tar.bz2` 的目录。
 - 模型目录加载失败：确认 `$modelDir` 指向解压后的目录，且里面包含 `encoder-epoch-99-avg-1.int8.onnx`、`decoder-epoch-99-avg-1.onnx`、`joiner-epoch-99-avg-1.int8.onnx` 和 `tokens.txt`。
-- 快捷键注册失败：`Alt+Space` 可能被其他软件占用。
+- 快捷键注册失败：`Ctrl+Alt+Space` 可能被其他软件占用。
 - `event.listen not allowed`：确认 `apps/desktop/src-tauri/capabilities/default.json` 存在，且重新 `cargo build` / `cargo run`。
 - `no input config matches channels=1`：说明默认输入设备不暴露单声道采集。当前 `CpalCapture` 会回退到设备支持的通道数；如果仍出现该错误，先确认运行的是最新构建。
 - 粘贴失败：如果目标程序以管理员权限运行，`voice-cli` 或桌面应用也需要以管理员权限运行。
@@ -222,7 +222,7 @@ cargo run
 建议每次桌面端较大改动后至少覆盖一次下面矩阵：
 
 - 悬浮窗模式：
-  - `Alt+Space` 录音 -> local ASR -> 自动粘贴到 Notepad
+  - `Ctrl+Alt+Space` 录音 -> local ASR -> 自动粘贴到 Notepad
   - 点击麦克风录音 -> 自动粘贴到浏览器输入框
 - 文稿模式：
   - 录音结果写入内部编辑区，不自动粘贴到外部应用
@@ -266,7 +266,7 @@ cargo run
 - 环境：Windows 原生桌面，Git Bash 中运行 `apps/desktop/src-tauri` 的 `cargo run`，Rust / Cargo 可正常使用，MSVC 构建环境可完成桌面构建。
 - sherpa 静态库：`%USERPROFILE%\.cache\voice-flow\sherpa-onnx\sherpa-onnx-v1.13.2-win-x64-static-MT-Release-lib.tar.bz2`。
 - 模型目录：仓库内 `models\sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20`。
-- 结果：桌面悬浮窗可启动；按住 `Alt+Space` 能调用麦克风；松开后完成端侧 ASR 转写，悬浮窗显示最近文本，并自动写入剪贴板 / 粘贴到当前光标位置。
+- 结果：桌面悬浮窗可启动；按住 `Ctrl+Alt+Space` 能调用麦克风；松开后完成端侧 ASR 转写，悬浮窗显示最近文本，并自动写入剪贴板 / 粘贴到当前光标位置。
 - 已修复问题：Tauri v2 缺 capability 导致 `event.listen not allowed`；Windows 默认麦克风不支持请求的 `channels=1` 导致录音启动失败。
 
 补充：桌面应用不只可以通过 `cargo run` 启动。完成一次 `cargo build` / `cargo run` 后，也可以直接运行 `apps\desktop\src-tauri\target\debug\voice-flow-desktop.exe` 进行手测。

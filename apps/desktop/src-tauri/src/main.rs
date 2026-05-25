@@ -1193,7 +1193,7 @@ fn load_config() -> AppConfig {
 }
 
 fn migrate_config_defaults(mut config: AppConfig) -> (AppConfig, bool) {
-    if config.hotkey == legacy_default_hotkey() {
+    if config.hotkey == previous_default_hotkey() {
         config.hotkey = HotkeyConfig::default();
         return (config, true);
     }
@@ -1201,9 +1201,9 @@ fn migrate_config_defaults(mut config: AppConfig) -> (AppConfig, bool) {
     (config, false)
 }
 
-fn legacy_default_hotkey() -> HotkeyConfig {
+fn previous_default_hotkey() -> HotkeyConfig {
     HotkeyConfig {
-        ctrl: true,
+        ctrl: false,
         alt: true,
         shift: false,
         logo: false,

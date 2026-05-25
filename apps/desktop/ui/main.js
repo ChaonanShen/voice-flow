@@ -37,7 +37,7 @@ const configDefaults = {
     engine: "local",
   },
   hotkey: {
-    ctrl: false,
+    ctrl: true,
     alt: true,
     shift: false,
     logo: false,
@@ -129,7 +129,7 @@ function renderFloatingMode() {
     ? "监听已暂停"
     : store.manualRecording
       ? "点击结束录音"
-      : "点击开始/结束；Alt+Space 按住说话";
+      : "点击开始/结束；Ctrl+Alt+Space 按住说话";
 }
 
 function renderDocumentMode() {

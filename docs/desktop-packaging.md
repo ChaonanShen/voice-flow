@@ -64,7 +64,7 @@ $env:SHERPA_ONNX_ARCHIVE_DIR = "$env:USERPROFILE\.cache\voice-flow\sherpa-onnx"
 2. 悬浮窗模式默认显示小圆形麦克风。
 3. 文稿模式可切换，编辑区可见。
 4. 设置页能看到模型目录、ASR engine、rewrite 设置和 diagnostics。
-5. Local ASR 下按住 `Alt+Space` 或点击麦克风可以完成一次转写。
+5. Local ASR 下按住 `Ctrl+Alt+Space` 或点击麦克风可以完成一次转写。
 6. 文稿模式下结果写入内部编辑区，不自动粘贴外部应用。
 7. 悬浮窗模式下结果会自动粘贴到当前输入框。
 8. 如果切到 cloud ASR 或启用 rewrite，缺 key 时应给出可理解错误，不静默 fallback。

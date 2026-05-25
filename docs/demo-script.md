@@ -19,7 +19,7 @@ $env:SHERPA_ONNX_ARCHIVE_DIR = "$env:USERPROFILE\.cache\voice-flow\sherpa-onnx"
 1. 确认设置页 `ASR engine = local`。
 2. 切回悬浮窗模式。
 3. 聚焦 Notepad 或浏览器输入框。
-4. 按住 `Alt+Space` 说一句普通中文。
+4. 按住 `Ctrl+Alt+Space` 说一句普通中文。
 5. 松开后，观察：
    - 悬浮窗状态变化：Recording -> Transcribing -> Completed
    - 文本自动粘贴到当前输入框
