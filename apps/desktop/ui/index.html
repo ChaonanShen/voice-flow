@@ -193,27 +193,11 @@
             </select>
           </label>
 
-          <div class="rewrite-grid">
-            <label class="field">
-              <span>超时 ms</span>
-              <input id="settings-rewrite-timeout" type="number" min="500" step="100" />
-            </label>
-            <label class="field">
-              <span>API key</span>
-              <input id="settings-rewrite-api-key" type="password" autocomplete="off" />
-            </label>
-          </div>
-
-          <div class="key-actions">
-            <button id="settings-clear-rewrite-key" type="button">清除 key</button>
-            <span id="settings-rewrite-key-status">未保存</span>
-          </div>
-
           <div class="rewrite-summary" aria-label="当前改写设置">
             <span id="settings-rewrite-profile-summary">clean</span>
             <span id="settings-rewrite-key-summary">DEEPSEEK_API_KEY</span>
           </div>
-          <p class="pane-note">API key 会保存到系统凭据管理器，不写入 app.toml；留空保存只更新改写设置。</p>
+          <p class="pane-note">API key 需通过对应环境变量提供（如 DEEPSEEK_API_KEY），不在 UI 中保存。</p>
         </div>
 
         <div class="settings-actions">

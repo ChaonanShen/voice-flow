@@ -88,10 +88,6 @@ const settingsPanes = document.querySelectorAll("[data-settings-pane]");
 const rewriteEnabled = document.querySelector("#settings-rewrite-enabled");
 const rewriteEnabledLabel = document.querySelector("#settings-rewrite-enabled-label");
 const rewriteProfile = document.querySelector("#settings-rewrite-profile");
-const rewriteTimeout = document.querySelector("#settings-rewrite-timeout");
-const rewriteApiKey = document.querySelector("#settings-rewrite-api-key");
-const clearRewriteKey = document.querySelector("#settings-clear-rewrite-key");
-const rewriteKeyStatus = document.querySelector("#settings-rewrite-key-status");
 const rewriteProfileSummary = document.querySelector("#settings-rewrite-profile-summary");
 const rewriteKeySummary = document.querySelector("#settings-rewrite-key-summary");
 
@@ -112,7 +108,6 @@ const store = {
   config: normalizeConfig(configDefaults),
   settingsTab: "input",
   asrKeySaved: false,
-  rewriteKeySaved: false,
   paused: false,
   mode: "floating",
   previousContentMode: "floating",
@@ -349,19 +344,16 @@ function applyRewriteConfig(rewrite) {
   };
   rewriteEnabled.checked = Boolean(config.enabled);
   rewriteProfile.value = config.default_profile ?? rewriteDefaults.default_profile;
-  rewriteTimeout.value = String(config.timeout_ms ?? rewriteDefaults.timeout_ms);
-  rewriteApiKey.value = "";
   updateRewriteSummary();
 }
 
 function readRewriteConfig() {
-  const timeout = Number.parseInt(rewriteTimeout.value, 10);
   return {
     enabled: rewriteEnabled.checked,
     provider: currentRewriteProvider(),
     model: null,
     default_profile: rewriteProfile.value,
-    timeout_ms: Number.isFinite(timeout) ? timeout : rewriteDefaults.timeout_ms,
+    timeout_ms: store.config.rewrite.timeout_ms ?? rewriteDefaults.timeout_ms,
     user_dictionary: {},
   };
 }
@@ -373,9 +365,6 @@ function updateRewriteSummary() {
   rewriteEnabledLabel.textContent = rewriteEnabled.checked ? "开启" : "关闭";
   rewriteProfileSummary.textContent = profile;
   rewriteKeySummary.textContent = meta.env;
-  rewriteKeyStatus.textContent = store.rewriteKeySaved
-    ? `${provider} key 已保存`
-    : `未保存，将回退到 ${meta.env}`;
 }
 
 function updateAsrSummary() {
@@ -424,27 +413,6 @@ function insertAtSelection(current, text) {
   return `${current.slice(0, start)}${text}${current.slice(end)}`;
 }
 
-async function refreshRewriteKeyStatus() {
-  const provider = currentRewriteProvider();
-  if (!invoke) {
-    store.rewriteKeySaved = false;
-    updateRewriteSummary();
-    return;
-  }
-
-  try {
-    const status = await invoke("get_rewrite_key_status", {
-      request: { provider },
-    });
-    store.rewriteKeySaved = Boolean(status?.saved);
-  } catch (error) {
-    store.rewriteKeySaved = false;
-    store.settingsMessage = String(error);
-    renderSettingsView();
-  }
-  updateRewriteSummary();
-}
-
 async function refreshAsrKeyStatus() {
   const engine = currentAsrEngine();
   if (engine !== "cloud") {
@@ -467,22 +435,6 @@ async function refreshAsrKeyStatus() {
     renderSettingsView();
   }
   updateAsrSummary();
-}
-
-async function saveRewriteKeyIfNeeded() {
-  const apiKey = rewriteApiKey.value.trim();
-  if (!apiKey) {
-    return;
-  }
-
-  const status = await invoke("save_rewrite_key", {
-    request: {
-      provider: currentRewriteProvider(),
-      api_key: apiKey,
-    },
-  });
-  rewriteApiKey.value = "";
-  store.rewriteKeySaved = Boolean(status?.saved);
 }
 
 function switchSettingsTab(tab) {
@@ -676,7 +628,6 @@ async function boot() {
     void applyWindowChrome("voice-pad");
   }
   await refreshAsrKeyStatus();
-  await refreshRewriteKeyStatus();
   store.settingsMessage = "运行中";
   renderSettingsView();
   await invoke("start_runtime");
@@ -842,33 +793,6 @@ clearAsrKey.addEventListener("click", async () => {
   }
 });
 
-clearRewriteKey.addEventListener("click", async () => {
-  store.settingsMessage = "清除中...";
-  renderSettingsView();
-  try {
-    if (!invoke) {
-      rewriteApiKey.value = "";
-      store.rewriteKeySaved = false;
-      updateRewriteSummary();
-      store.settingsMessage = "预览模式";
-      renderSettingsView();
-      return;
-    }
-
-    const status = await invoke("delete_rewrite_key", {
-      request: { provider: currentRewriteProvider() },
-    });
-    rewriteApiKey.value = "";
-    store.rewriteKeySaved = Boolean(status?.saved);
-    updateRewriteSummary();
-    store.settingsMessage = "API key 已清除";
-    renderSettingsView();
-  } catch (error) {
-    store.settingsMessage = String(error);
-    renderSettingsView();
-  }
-});
-
 saveSettings.addEventListener("click", async () => {
   if (store.settingsTab === "rewrite") {
     store.settingsMessage = "保存中...";
@@ -884,9 +808,7 @@ saveSettings.addEventListener("click", async () => {
       const rewrite = await invoke("save_rewrite_config", {
         rewrite: readRewriteConfig(),
       });
-      await saveRewriteKeyIfNeeded();
       applyRewriteConfig(rewrite);
-      await refreshRewriteKeyStatus();
       store.settingsMessage = "改写设置已保存";
       renderSettingsView();
     } catch (error) {
