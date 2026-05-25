@@ -88,8 +88,6 @@ const settingsPanes = document.querySelectorAll("[data-settings-pane]");
 const rewriteEnabled = document.querySelector("#settings-rewrite-enabled");
 const rewriteEnabledLabel = document.querySelector("#settings-rewrite-enabled-label");
 const rewriteProfile = document.querySelector("#settings-rewrite-profile");
-const rewriteProfileSummary = document.querySelector("#settings-rewrite-profile-summary");
-const rewriteKeySummary = document.querySelector("#settings-rewrite-key-summary");
 
 const invoke = window.__TAURI__?.core?.invoke;
 const listen = window.__TAURI__?.event?.listen;
@@ -359,12 +357,7 @@ function readRewriteConfig() {
 }
 
 function updateRewriteSummary() {
-  const provider = currentRewriteProvider();
-  const profile = rewriteProfile.value;
-  const meta = providerDefaults[provider] ?? providerDefaults.deepseek;
   rewriteEnabledLabel.textContent = rewriteEnabled.checked ? "开启" : "关闭";
-  rewriteProfileSummary.textContent = profile;
-  rewriteKeySummary.textContent = meta.env;
 }
 
 function updateAsrSummary() {
