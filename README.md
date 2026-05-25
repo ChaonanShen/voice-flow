@@ -74,7 +74,7 @@ voice-flow 是一款 Windows 优先的桌面语音输入法：
 
 ### 方式 A：下载 Windows 安装包（推荐评委 / 体验用户）
 
-1. 从 [GitHub Releases](https://github.com/ChaonanShen/voice-flow/releases) 下载最新的 `voice-flow-setup-x.y.z.exe`（约 200 MB，含端侧 ASR 模型）
+1. 从 [Gitee Releases](https://gitee.com/MuMuNan/voice-flow/releases) 下载最新的 `voice-flow_x.y.z_x64-setup.exe`（约 200 MB，含端侧 ASR 模型）
 2. 双击安装，启动应用
 3. 首次启动会弹窗询问 DeepSeek API key：
    - 想用 AI 改写：粘贴 key → 确定
