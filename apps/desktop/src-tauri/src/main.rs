@@ -623,7 +623,7 @@ fn open_main_window(app: &AppHandle) {
 }
 
 fn run_runtime_session(app: &AppHandle, runtime: &RuntimeHandle, config: AppConfig) -> Result<()> {
-    let engine = build_desktop_engine(&config)?;
+    let engine = build_desktop_engine(app, &config)?;
     let hotkey = DesktopHotkey::register(app, config.hotkey.clone())
         .with_context(|| format!("failed to register hotkey {}", config.hotkey.to_label()))?;
     append_log(format!("registered hotkey {}", config.hotkey.to_label()));
@@ -970,17 +970,26 @@ fn asr_key_entry() -> Result<Entry> {
     Entry::new(ASR_KEYRING_SERVICE, "dashscope").map_err(|e| anyhow::anyhow!(e))
 }
 
-fn build_desktop_engine(config: &AppConfig) -> Result<Box<dyn AsrEngine>> {
-    let selection = resolve_desktop_selection(&config.asr, config.model_dir.as_deref())?;
+fn build_desktop_engine(app: &AppHandle, config: &AppConfig) -> Result<Box<dyn AsrEngine>> {
+    let selection = resolve_desktop_selection(app, &config.asr, config.model_dir.as_deref())?;
     build_engine(&selection)
 }
 
-fn resolve_desktop_selection(asr: &AsrConfig, model_dir: Option<&str>) -> Result<EngineSelection> {
+fn resolve_desktop_selection(
+    app: &AppHandle,
+    asr: &AsrConfig,
+    model_dir: Option<&str>,
+) -> Result<EngineSelection> {
     let model_dir = model_dir
         .map(PathBuf::from)
-        .filter(|path| !path.as_os_str().is_empty())
-        .or_else(|| std::env::var_os(MODEL_DIR_ENV).map(PathBuf::from))
-        .or_else(default_model_dir);
+        .filter(|path| !path.as_os_str().is_empty() && path.is_dir())
+        .or_else(|| {
+            std::env::var_os(MODEL_DIR_ENV)
+                .map(PathBuf::from)
+                .filter(|p| p.is_dir())
+        })
+        .or_else(|| bundled_model_dir(app))
+        .or_else(|| default_model_dir().filter(|p| p.is_dir()));
     let api_key = if asr.engine == EngineKind::Cloud {
         read_asr_key()?
             .or_else(|| std::env::var(DASHSCOPE_API_KEY_ENV).ok())
@@ -1169,14 +1178,13 @@ fn load_config() -> AppConfig {
     match AppConfig::read_from(&path) {
         Ok(config) => {
             let (config, migrated) = migrate_config_defaults(config);
-            let config = with_default_model_dir(config);
             if migrated {
                 let _ = config.write_to(&path);
             }
             config
         }
         Err(_) => {
-            let config = with_default_model_dir(AppConfig::default());
+            let config = AppConfig::default();
             let _ = config.write_to(&path);
             config
         }
@@ -1202,17 +1210,29 @@ fn legacy_default_hotkey() -> HotkeyConfig {
     }
 }
 
-fn with_default_model_dir(mut config: AppConfig) -> AppConfig {
-    if config.model_dir.is_none() {
-        if let Some(path) = default_model_dir() {
-            config.model_dir = Some(path.display().to_string());
-        }
-    }
-    config
-}
-
 fn default_model_dir() -> Option<PathBuf> {
     workspace_root().map(|root| root.join("models").join(DEFAULT_STREAMING_ZIPFORMER_DIR))
+}
+
+/// 解析 Tauri installer 把模型作为 resource 打包后的真实落地路径。
+///
+/// `bundle.resources` 用 list 形式时，Tauri 会把每个 `../` 替换为 `_up_`，
+/// 因此 `../../../models/<DIR>/encoder.onnx` 安装后变成
+/// `$RESOURCE/_up_/_up_/_up_/models/<DIR>/encoder.onnx`。
+/// 我们这里也按同样路径拼回 `<DIR>` 一层，传给 `StreamingZipformer`。
+fn bundled_model_dir(app: &AppHandle) -> Option<PathBuf> {
+    let resource_root = app.path().resource_dir().ok()?;
+    let candidate = resource_root
+        .join("_up_")
+        .join("_up_")
+        .join("_up_")
+        .join("models")
+        .join(DEFAULT_STREAMING_ZIPFORMER_DIR);
+    if candidate.is_dir() {
+        Some(candidate)
+    } else {
+        None
+    }
 }
 
 fn workspace_root() -> Option<PathBuf> {
