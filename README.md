@@ -167,6 +167,7 @@ voice-flow/
 - 桌面打包：[`docs/desktop-packaging.md`](./docs/desktop-packaging.md)
 - Windows 手测：[`docs/windows_testing.md`](./docs/windows_testing.md)
 - Demo 脚本：[`docs/demo-script.md`](./docs/demo-script.md)
+- 已知未解问题：[`docs/known-issues.md`](./docs/known-issues.md)
 
 完整 ai-coding 执行计划、调试笔记、fixtures 均在 [`docs/`](./docs) 目录下。
 
