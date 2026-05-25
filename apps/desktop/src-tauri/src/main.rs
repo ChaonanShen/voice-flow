@@ -1296,6 +1296,9 @@ $key = [Microsoft.VisualBasic.Interaction]::InputBox(
 [Console]::Out.Write($key)
 "#;
 
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+
     let output = match Command::new("powershell")
         .args([
             "-NoProfile",
@@ -1305,6 +1308,7 @@ $key = [Microsoft.VisualBasic.Interaction]::InputBox(
             "-Command",
             script,
         ])
+        .creation_flags(CREATE_NO_WINDOW)
         .output()
     {
         Ok(output) => output,
