@@ -53,39 +53,37 @@
           </button>
         </section>
 
-        <section class="document-main" aria-label="文稿工作区">
-          <section class="document-card document-card-editor" aria-label="文稿编辑区">
-            <div class="document-editor-header">
-              <div>
-                <p class="label">文稿编辑区</p>
-                <p id="document-editor-mode-hint" class="document-editor-hint">新结果将插入到当前光标位置</p>
-              </div>
-              <div class="document-editor-actions">
-                <button class="document-editor-mode is-active" type="button" data-document-apply-mode="insert">
-                  插入光标
-                </button>
-                <button class="document-editor-mode" type="button" data-document-apply-mode="replace">
-                  替换全文
-                </button>
-                <button class="document-editor-mode" type="button" data-document-apply-mode="append">
-                  追加末尾
-                </button>
-              </div>
+        <section class="document-card document-card-editor" aria-label="文稿编辑区">
+          <div class="document-editor-header">
+            <div>
+              <p class="label">文稿编辑区</p>
+              <p id="document-editor-mode-hint" class="document-editor-hint">新结果将插入到当前光标位置</p>
             </div>
-
-            <textarea
-              id="document-editor"
-              class="document-editor"
-              spellcheck="false"
-              placeholder="文稿模式下，语音结果会写入这里。你也可以手动编辑。"
-            ></textarea>
-
-            <div class="document-editor-toolbar">
-              <button id="document-copy-editor" type="button">复制全文稿</button>
-              <button id="document-clear-editor" type="button">清空文稿</button>
-              <span id="document-editor-status"></span>
+            <div class="document-editor-actions">
+              <button class="document-editor-mode is-active" type="button" data-document-apply-mode="insert">
+                插入光标
+              </button>
+              <button class="document-editor-mode" type="button" data-document-apply-mode="replace">
+                替换全文
+              </button>
+              <button class="document-editor-mode" type="button" data-document-apply-mode="append">
+                追加末尾
+              </button>
             </div>
-          </section>
+          </div>
+
+          <textarea
+            id="document-editor"
+            class="document-editor"
+            spellcheck="false"
+            placeholder="文稿模式下，语音结果会写入这里。你也可以手动编辑。"
+          ></textarea>
+
+          <div class="document-editor-toolbar">
+            <button id="document-copy-editor" type="button">复制全文稿</button>
+            <button id="document-clear-editor" type="button">清空文稿</button>
+            <span id="document-editor-status"></span>
+          </div>
         </section>
 
         <section class="document-runtime-error" id="document-runtime-error" hidden aria-label="运行错误">

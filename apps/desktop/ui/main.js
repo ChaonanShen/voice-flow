@@ -100,7 +100,7 @@ const LogicalSize = window.__TAURI__?.dpi?.LogicalSize;
 /* 悬浮窗页面/文稿页面/设置页面的尺寸 */
 const windowSizes = {
   floating: { width: 110, height: 110 },
-  "voice-pad": { width: 720, height: 720 },
+  "voice-pad": { width: 560, height: 600 },
   settings: { width: 520, height: 400 },
 };
 const contentModes = new Set(["floating", "voice-pad"]);

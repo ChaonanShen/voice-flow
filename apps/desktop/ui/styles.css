@@ -199,15 +199,7 @@ select {
   color: #8a5a00;
 }
 
-.document-mode .document-main {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 0;
-}
-
 .document-mode .document-card {
-  flex: 1;
   min-width: 0;
   min-height: 0;
   border: 1px solid #d8dee8;
