@@ -2,6 +2,10 @@
 
 按住快捷键说话，松开自动粘贴文本到光标位置。**端侧 ASR 默认开启**，离线可用、隐私不离开设备；DeepSeek API key 可选用于 AI 改写。
 
+介绍视频：[`media/voice-flow-intro.mp4`](./media/voice-flow-intro.mp4)
+
+如果当前代码托管平台不支持在 README 内直接播放仓库里的 `mp4`，请直接打开上面的文件观看。
+
 ---
 
 ## 一、产品介绍
