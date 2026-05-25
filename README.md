@@ -2,7 +2,7 @@
 
 按住快捷键说话，松开自动粘贴文本到光标位置。**端侧 ASR 默认开启**，离线可用、隐私不离开设备；云端引擎作为可选增强。
 
-> 状态：开发中。本 README 为骨架，随各 Step 逐步完善。基础语音转文本路线见 [`plans/plan.md`](./plans/plan.md)，AI 改写路线见 [`plans/ai_rewrite_plan.md`](./plans/ai_rewrite_plan.md)，Windows GUI 提升路线见 [`plans/desktop_gui_plan.md`](./plans/desktop_gui_plan.md)。所有 ai-coding 执行计划与调试笔记统一在 [`plans/`](./plans) 目录下。
+> 状态：开发中。本 README 为骨架，随各 Step 逐步完善。基础语音转文本路线见 [`docs/plan.md`](./docs/plan.md)，AI 改写路线见 [`docs/ai_rewrite_plan.md`](./docs/ai_rewrite_plan.md)，Windows GUI 提升路线见 [`docs/desktop_gui_plan.md`](./docs/desktop_gui_plan.md)。所有 ai-coding 执行计划与调试笔记统一在 [`docs/`](./docs) 目录下。
 
 ## 一、产品定位
 
@@ -36,7 +36,7 @@ voice-flow/
 │   └── voice-cli/          # CLI 验证工具
 ├── apps/desktop/           # Tauri 应用（Step 6 引入）
 ├── models/.gitkeep         # gitignore 实际权重，由脚本下载
-└── plans/                  # ai-coding 执行计划、调试笔记、演示脚本
+└── docs/                   # ai-coding 执行计划、调试笔记、演示脚本、fixtures
 ```
 
 ## 四、构建与运行
@@ -121,14 +121,14 @@ cargo test -p voice-core text_pipeline
 cargo test -p voice-rewrite --test live_deepseek_examples -- --ignored --nocapture --test-threads=1
 ```
 
-更多演示步骤见 [`plans/demo-rewrite.md`](./plans/demo-rewrite.md)。当前阶段完成项、GUI 运行方式和测试记录见 [`plans/rewrite-stage-report.md`](./plans/rewrite-stage-report.md)。
+更多演示步骤见 [`docs/demo-rewrite.md`](./docs/demo-rewrite.md)。当前阶段完成项、GUI 运行方式和测试记录见 [`docs/rewrite-stage-report.md`](./docs/rewrite-stage-report.md)。
 
 ## 六、桌面端文档
 
-- Windows 手测与 QA：[`plans/windows_testing.md`](./plans/windows_testing.md)
-- Desktop GUI 路线：[`plans/desktop_gui_plan.md`](./plans/desktop_gui_plan.md)
-- Desktop 打包：[`plans/desktop-packaging.md`](./plans/desktop-packaging.md)
-- 总 demo script：[`plans/demo-script.md`](./plans/demo-script.md)
+- Windows 手测与 QA：[`docs/windows_testing.md`](./docs/windows_testing.md)
+- Desktop GUI 路线：[`docs/desktop_gui_plan.md`](./docs/desktop_gui_plan.md)
+- Desktop 打包：[`docs/desktop-packaging.md`](./docs/desktop-packaging.md)
+- 总 demo script：[`docs/demo-script.md`](./docs/demo-script.md)
 
 当前已自动验证：
 
@@ -143,7 +143,7 @@ cargo test -p voice-rewrite --test live_deepseek_examples -- --ignored --nocaptu
 - `MSI`
 - `NSIS setup.exe`
 
-详见 [`plans/desktop-packaging.md`](./plans/desktop-packaging.md)。
+详见 [`docs/desktop-packaging.md`](./docs/desktop-packaging.md)。
 
 ## 七、模型下载
 
@@ -158,7 +158,7 @@ EXTRACT=0 bash scripts/download-models.sh
 
 ## 八、Demo 视频
 
-当前建议按 [`plans/demo-script.md`](./plans/demo-script.md) 的顺序录制演示。B 站链接待补。
+当前建议按 [`docs/demo-script.md`](./docs/demo-script.md) 的顺序录制演示。B 站链接待补。
 
 ## 九、许可证
 
