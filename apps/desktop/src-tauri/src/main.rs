@@ -537,6 +537,7 @@ fn main() {
         .setup(|app| {
             setup_tray(app)?;
             setup_close_to_tray(app);
+            maybe_prompt_deepseek_key();
             app.emit(
                 "realtime-state",
                 RealtimeStateEvent::new(RealtimeState::Idle),
@@ -1249,6 +1250,98 @@ fn config_path() -> PathBuf {
         .join("voice-flow")
         .join("app.toml")
 }
+
+/// 跳过 key 弹窗的标记文件路径——用户点过"跳过"后写入，下次不再弹。
+fn key_prompt_skip_marker() -> PathBuf {
+    dirs::config_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("voice-flow")
+        .join(".skip-deepseek-prompt")
+}
+
+/// 首次启动检查：若 keyring 中没有 DeepSeek key 且环境变量也未设置，
+/// 异步弹一个原生 InputBox 让用户粘 key（也可以跳过）。仅 Windows。
+fn maybe_prompt_deepseek_key() {
+    #[cfg(target_os = "windows")]
+    {
+        if std::env::var(voice_rewrite::DEEPSEEK_API_KEY_ENV)
+            .map(|v| !v.trim().is_empty())
+            .unwrap_or(false)
+        {
+            return;
+        }
+        if matches!(read_rewrite_key(RewriteProvider::DeepSeek), Ok(Some(_))) {
+            return;
+        }
+        if key_prompt_skip_marker().exists() {
+            return;
+        }
+
+        thread::Builder::new()
+            .name("voice-flow-key-prompt".to_string())
+            .spawn(prompt_deepseek_key_via_powershell)
+            .ok();
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn prompt_deepseek_key_via_powershell() {
+    let script = r#"
+[void][System.Reflection.Assembly]::LoadWithPartialName('Microsoft.VisualBasic')
+$key = [Microsoft.VisualBasic.Interaction]::InputBox(
+  "voice-flow 需要 DeepSeek API key 才能启用 AI 改写。`n`n请粘贴 key（留空表示跳过；评委体验请联系作者获取）。",
+  "voice-flow · DeepSeek key",
+  ""
+)
+[Console]::Out.Write($key)
+"#;
+
+    let output = match Command::new("powershell")
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            script,
+        ])
+        .output()
+    {
+        Ok(output) => output,
+        Err(err) => {
+            append_log(format!("deepseek key prompt failed to launch: {err}"));
+            return;
+        }
+    };
+
+    let key = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if key.is_empty() {
+        let _ = std::fs::create_dir_all(
+            key_prompt_skip_marker()
+                .parent()
+                .unwrap_or_else(|| Path::new(".")),
+        );
+        let _ = std::fs::File::create(key_prompt_skip_marker());
+        append_log("deepseek key prompt: user skipped; marker written");
+        return;
+    }
+
+    let entry = match rewrite_key_entry(RewriteProvider::DeepSeek) {
+        Ok(entry) => entry,
+        Err(err) => {
+            append_log(format!("failed to open keyring for deepseek key: {err}"));
+            return;
+        }
+    };
+    if let Err(err) = entry.set_password(&key) {
+        append_log(format!("failed to write deepseek key to keyring: {err}"));
+    } else {
+        append_log("deepseek key saved to keyring via first-run prompt");
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn prompt_deepseek_key_via_powershell() {}
 
 fn log_path() -> PathBuf {
     dirs::config_dir()
